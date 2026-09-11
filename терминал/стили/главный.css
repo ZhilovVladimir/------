@@ -1,0 +1,550 @@
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: hidden;
+
+    font-family:
+        "Segoe UI",
+        Arial,
+        sans-serif;
+
+    background:
+        radial-gradient(
+            circle at 50% 20%,
+            #18352f 0%,
+            #0b1716 45%,
+            #050b0b 100%
+        );
+
+    color: #d9f5e9;
+}
+
+button {
+    font-family: inherit;
+}
+
+#приложение {
+    display: grid;
+
+    grid-template-rows:
+        72px
+        minmax(0, 1fr)
+        190px
+        34px;
+
+    width: 100%;
+    height: 100%;
+}
+
+
+/* ============================================================
+   ВЕРХНЯЯ ПАНЕЛЬ
+   ============================================================ */
+
+.верхняя-панель {
+    display: flex;
+
+    align-items: center;
+
+    padding:
+        0 18px;
+
+    gap: 28px;
+
+    border-bottom:
+        1px solid rgba(120, 230, 190, 0.18);
+
+    background:
+        rgba(4, 14, 13, 0.92);
+
+    box-shadow:
+        0 4px 25px rgba(0, 0, 0, 0.35);
+}
+
+.логотип {
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+
+    min-width: 270px;
+}
+
+.логотип-значок {
+    font-size: 34px;
+
+    filter:
+        drop-shadow(
+            0 0 12px rgba(100, 255, 200, 0.5)
+        );
+}
+
+.логотип-название {
+    font-size: 20px;
+
+    font-weight: 700;
+
+    letter-spacing: 4px;
+
+    color: #bfffe5;
+}
+
+.логотип-подпись {
+    margin-top: 2px;
+
+    font-size: 10px;
+
+    letter-spacing: 1px;
+
+    color: #719c8d;
+}
+
+.панель-проекта {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 2px;
+
+    flex: 1;
+}
+
+.подпись {
+    font-size: 9px;
+
+    letter-spacing: 2px;
+
+    color: #53786d;
+}
+
+#имя-проекта {
+    font-size: 13px;
+
+    color: #b9d8cc;
+}
+
+.кнопки-запуска {
+    display: flex;
+
+    gap: 7px;
+}
+
+.кнопка {
+    padding:
+        8px 13px;
+
+    border:
+        1px solid rgba(130, 220, 190, 0.18);
+
+    border-radius: 6px;
+
+    background:
+        rgba(20, 45, 40, 0.8);
+
+    color: #a9cfc1;
+
+    cursor: pointer;
+
+    transition:
+        0.18s ease;
+}
+
+.кнопка:hover {
+    border-color:
+        rgba(130, 240, 200, 0.45);
+
+    background:
+        rgba(30, 70, 60, 0.9);
+
+    color: #e4fff4;
+}
+
+.кнопка-запуск {
+    color: #baffd9;
+
+    border-color:
+        rgba(100, 255, 180, 0.35);
+}
+
+
+/* ============================================================
+   РАБОЧАЯ ОБЛАСТЬ
+   ============================================================ */
+
+.рабочая-область {
+    display: grid;
+
+    grid-template-columns:
+        220px
+        minmax(400px, 1fr)
+        270px;
+
+    min-height: 0;
+
+    gap: 1px;
+
+    background:
+        rgba(100, 200, 170, 0.08);
+}
+
+.панель {
+    min-width: 0;
+    min-height: 0;
+
+    background:
+        rgba(7, 18, 17, 0.94);
+
+    overflow: hidden;
+}
+
+.заголовок-панели {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    height: 38px;
+
+    padding:
+        0 13px;
+
+    border-bottom:
+        1px solid rgba(120, 230, 190, 0.10);
+
+    font-size: 10px;
+
+    font-weight: 700;
+
+    letter-spacing: 2px;
+
+    color: #709b8d;
+}
+
+
+/* ============================================================
+   ПРОЕКТ
+   ============================================================ */
+
+.дерево-проекта {
+    padding: 10px 8px;
+}
+
+.папка {
+    padding:
+        8px 9px;
+
+    margin-bottom: 2px;
+
+    border-radius: 5px;
+
+    font-size: 12px;
+
+    color: #9dbeb2;
+
+    cursor: pointer;
+
+    transition:
+        0.15s ease;
+}
+
+.папка:hover {
+    background:
+        rgba(100, 220, 180, 0.08);
+
+    color: #d8fff0;
+}
+
+
+/* ============================================================
+   РЕДАКТОР
+   ============================================================ */
+
+.редактор {
+    display: flex;
+
+    flex-direction: column;
+}
+
+.индикатор {
+    padding:
+        3px 7px;
+
+    border-radius: 4px;
+
+    background:
+        rgba(70, 180, 130, 0.08);
+
+    color: #78ba9f;
+
+    font-size: 9px;
+
+    letter-spacing: 1px;
+}
+
+.редактор-кода {
+    display: flex;
+
+    flex: 1;
+
+    min-height: 0;
+
+    overflow: auto;
+
+    background:
+        rgba(3, 10, 10, 0.7);
+}
+
+.номер-строки {
+    width: 45px;
+
+    padding:
+        14px 9px;
+
+    text-align: right;
+
+    user-select: none;
+
+    font-family:
+        Consolas,
+        monospace;
+
+    font-size: 13px;
+
+    line-height: 1.8;
+
+    color: #39554d;
+
+    border-right:
+        1px solid rgba(120, 230, 190, 0.08);
+}
+
+#код {
+    margin: 0;
+
+    padding:
+        14px 18px;
+
+    font-family:
+        Consolas,
+        "Courier New",
+        monospace;
+
+    font-size: 14px;
+
+    line-height: 1.8;
+
+    color: #bdd8cd;
+
+    white-space: pre;
+
+    flex: 1;
+}
+
+.ключевое {
+    color: #8fe8c0;
+}
+
+.текст {
+    color: #d5c58d;
+}
+
+
+/* ============================================================
+   НАБЛЮДЕНИЕ
+   ============================================================ */
+
+.блок-наблюдения {
+    padding:
+        10px 12px;
+
+    border-bottom:
+        1px solid rgba(120, 230, 190, 0.07);
+}
+
+.блок-наблюдения h3 {
+    margin:
+        0 0 8px;
+
+    font-size: 10px;
+
+    letter-spacing: 1px;
+
+    font-weight: 600;
+
+    color: #638b80;
+}
+
+.список-наблюдения {
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 4px;
+}
+
+.элемент-наблюдения {
+    display: flex;
+
+    justify-content: space-between;
+
+    gap: 10px;
+
+    padding: 5px 6px;
+
+    border-radius: 4px;
+
+    background:
+        rgba(100, 220, 180, 0.04);
+
+    font-family:
+        Consolas,
+        monospace;
+
+    font-size: 11px;
+
+    color: #789c91;
+}
+
+.элемент-наблюдения strong {
+    color: #b9d9cc;
+
+    font-weight: 500;
+}
+
+
+/* ============================================================
+   КОНСОЛЬ
+   ============================================================ */
+
+.консоль {
+    display: flex;
+
+    flex-direction: column;
+
+    min-height: 0;
+
+    border-top:
+        1px solid rgba(120, 230, 190, 0.12);
+
+    background:
+        rgba(3, 10, 10, 0.96);
+}
+
+.заголовок-консоли {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    height: 34px;
+
+    padding:
+        0 14px;
+
+    border-bottom:
+        1px solid rgba(120, 230, 190, 0.08);
+
+    font-size: 9px;
+
+    font-weight: 700;
+
+    letter-spacing: 2px;
+
+    color: #62877d;
+}
+
+#состояние {
+    color: #70c39d;
+
+    letter-spacing: 0;
+}
+
+.вывод {
+    flex: 1;
+
+    overflow: auto;
+
+    padding:
+        10px 14px;
+
+    font-family:
+        Consolas,
+        monospace;
+
+    font-size: 12px;
+
+    line-height: 1.7;
+
+    color: #86aa9f;
+}
+
+
+/* ============================================================
+   НИЖНЯЯ ПАНЕЛЬ
+   ============================================================ */
+
+.нижняя-панель {
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    padding:
+        0 14px;
+
+    background:
+        rgba(3, 10, 9, 0.98);
+
+    border-top:
+        1px solid rgba(120, 230, 190, 0.08);
+
+    font-size: 9px;
+
+    letter-spacing: 1px;
+
+    color: #46675d;
+}
+
+#состояние-системы {
+    color: #6eaa91;
+}
+
+
+/* ============================================================
+   ПОЛОСА ПРОКРУТКИ
+   ============================================================ */
+
+::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+}
+
+::-webkit-scrollbar-track {
+    background:
+        rgba(0, 0, 0, 0.15);
+}
+
+::-webkit-scrollbar-thumb {
+    background:
+        rgba(100, 190, 160, 0.18);
+
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background:
+        rgba(100, 220, 180, 0.3);
+}

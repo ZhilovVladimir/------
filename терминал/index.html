@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>🐌 Улитка — Терминал</title>
+
+    <link
+        rel="stylesheet"
+        href="./стили/главный.css"
+    >
+</head>
+
+<body>
+
+    <div id="приложение">
+
+        <header class="верхняя-панель">
+
+            <div class="логотип">
+                <span class="логотип-значок">🐌</span>
+
+                <div>
+                    <div class="логотип-название">
+                        УЛИТКА
+                    </div>
+
+                    <div class="логотип-подпись">
+                        Русская среда программирования
+                    </div>
+                </div>
+            </div>
+
+            <div class="панель-проекта">
+                <span class="подпись">
+                    ПРОЕКТ
+                </span>
+
+                <span id="имя-проекта">
+                    Новый проект
+                </span>
+            </div>
+
+            <div class="кнопки-запуска">
+
+                <button
+                    id="кнопка-запуск"
+                    class="кнопка кнопка-запуск"
+                >
+                    ▶ Запуск
+                </button>
+
+                <button
+                    id="кнопка-остановка"
+                    class="кнопка"
+                >
+                    ■ Стоп
+                </button>
+
+                <button
+                    id="кнопка-настройки"
+                    class="кнопка"
+                >
+                    ⚙
+                </button>
+
+            </div>
+
+        </header>
+
+
+        <main class="рабочая-область">
+
+            <aside class="панель проект">
+
+                <div class="заголовок-панели">
+                    ПРОЕКТ
+                </div>
+
+                <div class="дерево-проекта">
+
+                    <div class="папка">
+                        📁 исходники
+                    </div>
+
+                    <div class="папка">
+                        📁 3d
+                    </div>
+
+                    <div class="папка">
+                        📁 примеры
+                    </div>
+
+                    <div class="папка">
+                        📁 документы
+                    </div>
+
+                    <div class="папка">
+                        📁 результаты
+                    </div>
+
+                </div>
+
+            </aside>
+
+
+            <section class="панель редактор">
+
+                <div class="заголовок-панели">
+
+                    <span>
+                        РЕДАКТОР
+                    </span>
+
+                    <span
+                        id="состояние-редактора"
+                        class="индикатор"
+                    >
+                        готов
+                    </span>
+
+                </div>
+
+                <div class="редактор-кода">
+
+                    <div class="номер-строки">
+                        1<br>
+                        2<br>
+                        3<br>
+                        4<br>
+                        5<br>
+                        6<br>
+                        7
+                    </div>
+
+                    <pre id="код"><span class="ключевое">программа</span> пример
+
+<span class="ключевое">начало</span>
+
+    <span class="ключевое">пусть</span> имя = <span class="текст">"Владимир"</span>
+
+    <span class="ключевое">показать</span> имя
+
+<span class="ключевое">конец</span></pre>
+
+                </div>
+
+            </section>
+
+
+            <aside class="панель наблюдение">
+
+                <div class="заголовок-панели">
+                    НАБЛЮДЕНИЕ
+                </div>
+
+                <section class="блок-наблюдения">
+
+                    <h3>
+                        Переменные
+                    </h3>
+
+                    <div
+                        id="переменные"
+                        class="список-наблюдения"
+                    >
+                        <div class="элемент-наблюдения">
+                            <span>имя</span>
+                            <strong>"Владимир"</strong>
+                        </div>
+                    </div>
+
+                </section>
+
+
+                <section class="блок-наблюдения">
+
+                    <h3>
+                        Функции
+                    </h3>
+
+                    <div
+                        id="функции"
+                        class="список-наблюдения"
+                    >
+                        <div class="элемент-наблюдения">
+                            пока нет функций
+                        </div>
+                    </div>
+
+                </section>
+
+            </aside>
+
+        </main>
+
+
+        <section class="консоль">
+
+            <div class="заголовок-консоли">
+
+                <span>
+                    КОНСОЛЬ
+                </span>
+
+                <span id="состояние">
+                    ● Готово
+                </span>
+
+            </div>
+
+            <div
+                id="вывод"
+                class="вывод"
+            >
+                <div>
+                    🐌 Терминал «Улитки» готов.
+                </div>
+
+                <div>
+                    ▶ Ожидание запуска программы...
+                </div>
+            </div>
+
+        </section>
+
+
+        <footer class="нижняя-панель">
+
+            <div>
+                УЛИТКА 0.1.0
+            </div>
+
+            <div id="состояние-системы">
+                ● Система готова
+            </div>
+
+            <div>
+                3D-ЯДРО: ожидание
+            </div>
+
+        </footer>
+
+    </div>
+
+    <script
+        type="module"
+        src="./исходники/главный.ts"
+    ></script>
+
+</body>
+</html>

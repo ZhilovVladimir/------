@@ -11,8 +11,12 @@
   ],
   "author": "Владимир",
   "license": "MIT",
+  "scripts": {
+    "dev": "vite"
+  },
   "devDependencies": {
     "@types/node": "^26.4.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
   }
 }
