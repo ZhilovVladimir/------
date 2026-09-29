@@ -1,48 +1,127 @@
+:root {
+
+    --фон: #070b10;
+
+    --фон-вторичный: #0c131b;
+
+    --панель: #111c27;
+
+    --панель-вторичная: #152432;
+
+    --граница: #263b4d;
+
+    --граница-яркая: #3d617a;
+
+    --текст: #dce7f0;
+
+    --текст-вторичный: #91a6b8;
+
+    --акцент: #55b9e6;
+
+    --акцент-яркий: #76d4ff;
+
+    --зелёный: #71c7a1;
+
+    --красный: #e37d88;
+
+    --ширина-проекта: 220px;
+
+    --ширина-наблюдения: 270px;
+
+    --высота-консоли: 210px;
+
+    --размер-разделителя: 8px;
+
+    --радиус: 8px;
+
+}
+
 * {
+
     box-sizing: border-box;
+
 }
 
 html,
 body {
-    margin: 0;
-    padding: 0;
 
     width: 100%;
     height: 100%;
 
+    margin: 0;
+
+}
+
+body {
+
     overflow: hidden;
+
+    background:
+
+        radial-gradient(
+            circle at 20% 0%,
+            #263746 0%,
+            transparent 34%
+        ),
+
+        radial-gradient(
+            circle at 100% 100%,
+            #182938 0%,
+            transparent 35%
+        ),
+
+        var(--фон);
+
+    color: var(--текст);
 
     font-family:
         "Segoe UI",
         Arial,
         sans-serif;
 
-    background:
-        radial-gradient(
-            circle at 50% 20%,
-            #18352f 0%,
-            #0b1716 45%,
-            #050b0b 100%
-        );
+}
 
-    color: #d9f5e9;
+button,
+input,
+textarea {
+
+    font: inherit;
+
 }
 
 button {
-    font-family: inherit;
+
+    user-select: none;
+
 }
 
 #приложение {
-    display: grid;
 
-    grid-template-rows:
-        72px
-        minmax(0, 1fr)
-        190px
-        34px;
+    --строка-заголовка: 72px;
+
+    --строка-низа: 34px;
 
     width: 100%;
-    height: 100%;
+    height: 100vh;
+
+    display: grid;
+
+    grid-template-columns: 1fr;
+
+    grid-template-rows:
+
+        var(--строка-заголовка)
+
+        minmax(260px, 1fr)
+
+        var(--размер-разделителя)
+
+        minmax(140px, var(--высота-консоли))
+
+        var(--строка-низа);
+
+    overflow: hidden;
+
 }
 
 
@@ -51,129 +130,225 @@ button {
    ============================================================ */
 
 .верхняя-панель {
-    display: flex;
 
+    min-width: 0;
+
+    display: flex;
     align-items: center;
+
+    gap: 18px;
 
     padding:
         0 18px;
 
-    gap: 28px;
+    background:
+
+        linear-gradient(
+            180deg,
+            #172633,
+            #101a24
+        );
 
     border-bottom:
-        1px solid rgba(120, 230, 190, 0.18);
-
-    background:
-        rgba(4, 14, 13, 0.92);
+        1px solid var(--граница);
 
     box-shadow:
-        0 4px 25px rgba(0, 0, 0, 0.35);
+        0 5px 18px rgba(0, 0, 0, 0.28);
+
+    z-index: 5;
+
 }
 
 .логотип {
-    display: flex;
 
+    min-width: 220px;
+
+    display: flex;
     align-items: center;
 
     gap: 12px;
 
-    min-width: 270px;
 }
 
 .логотип-значок {
-    font-size: 34px;
 
-    filter:
-        drop-shadow(
-            0 0 12px rgba(100, 255, 200, 0.5)
+    width: 42px;
+    height: 42px;
+
+    display: grid;
+    place-items: center;
+
+    border-radius: 10px;
+
+    background:
+
+        linear-gradient(
+            145deg,
+            #24536d,
+            #142b3b
         );
+
+    border:
+        1px solid #42738f;
+
+    box-shadow:
+        0 0 18px rgba(85, 185, 230, 0.14);
+
+    font-size: 23px;
+
 }
 
 .логотип-название {
-    font-size: 20px;
 
-    font-weight: 700;
+    color: #e7f4fb;
 
-    letter-spacing: 4px;
-
-    color: #bfffe5;
-}
-
-.логотип-подпись {
-    margin-top: 2px;
-
-    font-size: 10px;
-
-    letter-spacing: 1px;
-
-    color: #719c8d;
-}
-
-.панель-проекта {
-    display: flex;
-
-    flex-direction: column;
-
-    gap: 2px;
-
-    flex: 1;
-}
-
-.подпись {
-    font-size: 9px;
+    font-size: 16px;
+    font-weight: 800;
 
     letter-spacing: 2px;
 
-    color: #53786d;
+}
+
+.логотип-подпись {
+
+    margin-top: 2px;
+
+    color: var(--текст-вторичный);
+
+    font-size: 11px;
+
+}
+
+.панель-проекта,
+.панель-проекта * {
+
+    min-width: 0;
+
+}
+
+.панель-проекта {
+
+    flex: 1;
+
+    display: flex;
+    align-items: center;
+
+    gap: 9px;
+
+    overflow: hidden;
+
+}
+
+.панель-проекта .подпись {
+
+    color: var(--текст-вторичный);
+
+    font-size: 10px;
+    font-weight: 700;
+
+    letter-spacing: 1px;
+
 }
 
 #имя-проекта {
+
+    overflow: hidden;
+
+    color: var(--текст);
+
     font-size: 13px;
 
-    color: #b9d8cc;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
 }
 
 .кнопки-запуска {
+
     display: flex;
+    align-items: center;
 
     gap: 7px;
+
 }
 
 .кнопка {
+
+    min-height: 34px;
+
     padding:
-        8px 13px;
+        0 12px;
 
     border:
-        1px solid rgba(130, 220, 190, 0.18);
+        1px solid #345166;
 
     border-radius: 6px;
 
     background:
-        rgba(20, 45, 40, 0.8);
 
-    color: #a9cfc1;
+        linear-gradient(
+            180deg,
+            #1d3445,
+            #142532
+        );
+
+    color: #d9e8f1;
 
     cursor: pointer;
 
     transition:
-        0.18s ease;
+
+        background 120ms ease,
+        border-color 120ms ease,
+        transform 120ms ease;
+
 }
 
 .кнопка:hover {
-    border-color:
-        rgba(130, 240, 200, 0.45);
 
     background:
-        rgba(30, 70, 60, 0.9);
 
-    color: #e4fff4;
+        linear-gradient(
+            180deg,
+            #294a60,
+            #1a3445
+        );
+
+    border-color:
+        var(--акцент);
+
+}
+
+.кнопка:active {
+
+    transform:
+        translateY(1px);
+
 }
 
 .кнопка-запуск {
-    color: #baffd9;
 
     border-color:
-        rgba(100, 255, 180, 0.35);
+        #3c7563;
+
+    background:
+
+        linear-gradient(
+            180deg,
+            #21483f,
+            #18362f
+        );
+
+    color:
+        #bfe8d6;
+
+}
+
+.кнопка-запуск:hover {
+
+    border-color:
+        var(--зелёный);
+
 }
 
 
@@ -182,53 +357,221 @@ button {
    ============================================================ */
 
 .рабочая-область {
-    display: grid;
 
-    grid-template-columns:
-        220px
-        minmax(400px, 1fr)
-        270px;
-
-    min-height: 0;
-
-    gap: 1px;
-
-    background:
-        rgba(100, 200, 170, 0.08);
-}
-
-.панель {
     min-width: 0;
     min-height: 0;
 
-    background:
-        rgba(7, 18, 17, 0.94);
+    display: grid;
+
+    grid-template-columns:
+
+        minmax(170px, var(--ширина-проекта))
+
+        var(--размер-разделителя)
+
+        minmax(300px, 1fr)
+
+        var(--размер-разделителя)
+
+        minmax(210px, var(--ширина-наблюдения));
+
+    gap: 0;
 
     overflow: hidden;
+
+    background:
+        var(--фон);
+
+}
+
+
+/* ============================================================
+   РАЗДЕЛИТЕЛИ
+   ============================================================ */
+
+.разделитель {
+
+    position: relative;
+
+    z-index: 20;
+
+    background:
+        #0b151e;
+
+    user-select: none;
+
+    touch-action: none;
+
+}
+
+.разделитель::after {
+
+    content: "";
+
+    position: absolute;
+
+    background:
+        var(--граница);
+
+    border-radius:
+        3px;
+
+    transition:
+
+        background 120ms ease,
+        box-shadow 120ms ease;
+
+}
+
+.разделитель:hover::after {
+
+    background:
+        var(--акцент);
+
+    box-shadow:
+        0 0 9px rgba(85, 185, 230, 0.45);
+
+}
+
+.разделитель-вертикальный {
+
+    width:
+        var(--размер-разделителя);
+
+    cursor:
+        col-resize;
+
+}
+
+.разделитель-вертикальный::after {
+
+    top: 12px;
+    bottom: 12px;
+
+    left: 3px;
+    right: 3px;
+
+}
+
+.разделитель-горизонтальный {
+
+    width: 100%;
+
+    height:
+        var(--размер-разделителя);
+
+    cursor:
+        row-resize;
+
+}
+
+.разделитель-горизонтальный::after {
+
+    left: 12px;
+    right: 12px;
+
+    top: 3px;
+    bottom: 3px;
+
+}
+
+body.изменение-размера {
+
+    user-select: none;
+
+}
+
+body.изменение-размера-вертикальное {
+
+    cursor:
+        col-resize !important;
+
+}
+
+body.изменение-размера-горизонтальное {
+
+    cursor:
+        row-resize !important;
+
+}
+
+body.изменение-размера * {
+
+    cursor:
+        inherit !important;
+
+}
+
+
+/* ============================================================
+   ПАНЕЛИ
+   ============================================================ */
+
+.панель {
+
+    min-width: 0;
+    min-height: 0;
+
+    overflow: hidden;
+
+    background:
+
+        linear-gradient(
+            180deg,
+            #111c27,
+            #0d1720
+        );
+
+    border:
+        1px solid var(--граница);
+
+    border-radius:
+        var(--радиус);
+
 }
 
 .заголовок-панели {
+
+    height: 40px;
+
     display: flex;
-
     align-items: center;
-
     justify-content: space-between;
-
-    height: 38px;
 
     padding:
         0 13px;
 
+    background:
+        #142432;
+
     border-bottom:
-        1px solid rgba(120, 230, 190, 0.10);
+        1px solid var(--граница);
 
-    font-size: 10px;
+    color:
+        #c7d9e5;
 
-    font-weight: 700;
+    font-size:
+        10px;
 
-    letter-spacing: 2px;
+    font-weight:
+        800;
 
-    color: #709b8d;
+    letter-spacing:
+        1.2px;
+
+}
+
+.индикатор {
+
+    color:
+        var(--зелёный);
+
+    font-size:
+        9px;
+
+    letter-spacing:
+        0.5px;
+
 }
 
 
@@ -237,32 +580,48 @@ button {
    ============================================================ */
 
 .дерево-проекта {
-    padding: 10px 8px;
+
+    height:
+        calc(100% - 40px);
+
+    padding:
+        10px;
+
+    overflow:
+        auto;
+
 }
 
 .папка {
+
     padding:
-        8px 9px;
+        9px 10px;
 
-    margin-bottom: 2px;
+    margin-bottom:
+        4px;
 
-    border-radius: 5px;
+    border-radius:
+        5px;
 
-    font-size: 12px;
+    color:
+        #aec2d0;
 
-    color: #9dbeb2;
+    font-size:
+        12px;
 
-    cursor: pointer;
+    cursor:
+        default;
 
-    transition:
-        0.15s ease;
 }
 
 .папка:hover {
-    background:
-        rgba(100, 220, 180, 0.08);
 
-    color: #d8fff0;
+    background:
+        #192b3a;
+
+    color:
+        #dff2fc;
+
 }
 
 
@@ -270,93 +629,103 @@ button {
    РЕДАКТОР
    ============================================================ */
 
-.редактор {
-    display: flex;
-
-    flex-direction: column;
-}
-
-.индикатор {
-    padding:
-        3px 7px;
-
-    border-radius: 4px;
-
-    background:
-        rgba(70, 180, 130, 0.08);
-
-    color: #78ba9f;
-
-    font-size: 9px;
-
-    letter-spacing: 1px;
-}
-
 .редактор-кода {
-    display: flex;
 
-    flex: 1;
+    height:
+        calc(100% - 40px);
 
-    min-height: 0;
+    display:
+        grid;
 
-    overflow: auto;
+    grid-template-columns:
+        48px minmax(0, 1fr);
+
+    overflow:
+        auto;
 
     background:
-        rgba(3, 10, 10, 0.7);
+        #0a1118;
+
 }
 
 .номер-строки {
-    width: 45px;
 
     padding:
-        14px 9px;
+        15px 9px;
 
-    text-align: right;
+    color:
+        #536a79;
 
-    user-select: none;
+    background:
+        #0b151d;
+
+    border-right:
+        1px solid #1c2d3a;
 
     font-family:
         Consolas,
+        "Cascadia Code",
         monospace;
 
-    font-size: 13px;
+    font-size:
+        12px;
 
-    line-height: 1.8;
+    line-height:
+        1.75;
 
-    color: #39554d;
+    text-align:
+        right;
 
-    border-right:
-        1px solid rgba(120, 230, 190, 0.08);
+    user-select:
+        none;
+
 }
 
 #код {
-    margin: 0;
+
+    min-width:
+        max-content;
+
+    margin:
+        0;
 
     padding:
-        14px 18px;
+        15px 18px;
+
+    color:
+        #d6e4ec;
 
     font-family:
         Consolas,
-        "Courier New",
+        "Cascadia Code",
         monospace;
 
-    font-size: 14px;
+    font-size:
+        13px;
 
-    line-height: 1.8;
+    line-height:
+        1.75;
 
-    color: #bdd8cd;
+    white-space:
+        pre;
 
-    white-space: pre;
-
-    flex: 1;
 }
 
 .ключевое {
-    color: #8fe8c0;
+
+    color:
+        #65c5ec;
+
+    font-weight:
+        700;
+
 }
 
 .текст {
-    color: #d5c58d;
+
+    color:
+        #9ed5a7;
+
 }
 
 
@@ -364,62 +733,94 @@ button {
    НАБЛЮДЕНИЕ
    ============================================================ */
 
-.блок-наблюдения {
-    padding:
-        10px 12px;
+.наблюдение {
 
-    border-bottom:
-        1px solid rgba(120, 230, 190, 0.07);
+    overflow:
+        auto;
+
+}
+
+.блок-наблюдения {
+
+    margin:
+        10px;
+
+    padding:
+        10px;
+
+    border:
+        1px solid #243949;
+
+    border-radius:
+        6px;
+
+    background:
+        #0d1822;
+
 }
 
 .блок-наблюдения h3 {
+
     margin:
-        0 0 8px;
+        0 0 9px;
 
-    font-size: 10px;
+    color:
+        #90aabd;
 
-    letter-spacing: 1px;
+    font-size:
+        10px;
 
-    font-weight: 600;
+    font-weight:
+        700;
 
-    color: #638b80;
-}
+    letter-spacing:
+        0.8px;
 
-.список-наблюдения {
-    display: flex;
-
-    flex-direction: column;
-
-    gap: 4px;
 }
 
 .элемент-наблюдения {
-    display: flex;
 
-    justify-content: space-between;
+    display:
+        flex;
 
-    gap: 10px;
+    align-items:
+        center;
 
-    padding: 5px 6px;
+    justify-content:
+        space-between;
 
-    border-radius: 4px;
+    gap:
+        8px;
 
-    background:
-        rgba(100, 220, 180, 0.04);
+    padding:
+        7px 8px;
+
+    color:
+        #b9cbd6;
 
     font-family:
         Consolas,
         monospace;
 
-    font-size: 11px;
+    font-size:
+        11px;
 
-    color: #789c91;
+    border-radius:
+        4px;
+
+    background:
+        #111f2b;
+
 }
 
 .элемент-наблюдения strong {
-    color: #b9d9cc;
 
-    font-weight: 500;
+    color:
+        #a7d9b2;
+
+    font-weight:
+        600;
+
 }
 
 
@@ -428,66 +829,150 @@ button {
    ============================================================ */
 
 .консоль {
-    display: flex;
 
-    flex-direction: column;
+    min-width:
+        0;
 
-    min-height: 0;
+    min-height:
+        0;
 
-    border-top:
-        1px solid rgba(120, 230, 190, 0.12);
+    display:
+        grid;
+
+    grid-template-rows:
+        38px minmax(0, 1fr);
+
+    overflow:
+        hidden;
 
     background:
-        rgba(3, 10, 10, 0.96);
+        #0a1118;
+
+    border:
+        1px solid var(--граница);
+
+    border-radius:
+        var(--радиус);
+
 }
 
 .заголовок-консоли {
-    display: flex;
 
-    align-items: center;
+    display:
+        flex;
 
-    justify-content: space-between;
+    align-items:
+        center;
 
-    height: 34px;
+    justify-content:
+        space-between;
 
     padding:
-        0 14px;
+        0 13px;
+
+    background:
+        #142432;
 
     border-bottom:
-        1px solid rgba(120, 230, 190, 0.08);
+        1px solid var(--граница);
 
-    font-size: 9px;
+    color:
+        #c7d9e5;
 
-    font-weight: 700;
+    font-size:
+        10px;
 
-    letter-spacing: 2px;
+    font-weight:
+        800;
 
-    color: #62877d;
+    letter-spacing:
+        1.2px;
+
 }
 
 #состояние {
-    color: #70c39d;
 
-    letter-spacing: 0;
+    color:
+        var(--зелёный);
+
+    font-size:
+        9px;
+
+    letter-spacing:
+        0.5px;
+
 }
 
-.вывод {
-    flex: 1;
 
-    overflow: auto;
+/* ============================================================
+   ВЫВОД ТЕРМИНАЛА
+   ============================================================ */
+
+.вывод {
+
+    min-width:
+        0;
+
+    min-height:
+        0;
+
+    overflow:
+        auto;
 
     padding:
-        10px 14px;
+        6px 14px;
+
+    margin:
+        0;
+
+    color:
+        #cbd9e2;
 
     font-family:
         Consolas,
+        "Cascadia Code",
         monospace;
 
-    font-size: 12px;
+    font-size:
+        12px;
 
-    line-height: 1.7;
+    line-height:
+        1.2;
 
-    color: #86aa9f;
+    white-space:
+        pre-wrap;
+
+    overflow-wrap:
+        anywhere;
+
+    scrollbar-gutter:
+        stable;
+
+}
+
+.вывод > div {
+
+    display:
+        block;
+
+    width:
+        100%;
+
+    min-height:
+        0;
+
+    height:
+        auto;
+
+    margin:
+        0 !important;
+
+    padding:
+        0 !important;
+
+    line-height:
+        1.2;
+
 }
 
 
@@ -496,55 +981,233 @@ button {
    ============================================================ */
 
 .нижняя-панель {
-    display: flex;
 
-    align-items: center;
+    min-width:
+        0;
 
-    justify-content: space-between;
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
 
     padding:
         0 14px;
 
     background:
-        rgba(3, 10, 9, 0.98);
+        #0b1219;
 
     border-top:
-        1px solid rgba(120, 230, 190, 0.08);
+        1px solid var(--граница);
 
-    font-size: 9px;
+    color:
+        #748b9b;
 
-    letter-spacing: 1px;
+    font-size:
+        9px;
 
-    color: #46675d;
-}
+    letter-spacing:
+        0.6px;
 
-#состояние-системы {
-    color: #6eaa91;
 }
 
 
 /* ============================================================
-   ПОЛОСА ПРОКРУТКИ
+   ПОЛОСЫ ПРОКРУТКИ
    ============================================================ */
 
-::-webkit-scrollbar {
-    width: 7px;
-    height: 7px;
+* {
+
+    scrollbar-width:
+        thin;
+
+    scrollbar-color:
+        #365164
+        #0b131b;
+
 }
 
-::-webkit-scrollbar-track {
-    background:
-        rgba(0, 0, 0, 0.15);
+*::-webkit-scrollbar {
+
+    width:
+        9px;
+
+    height:
+        9px;
+
 }
 
-::-webkit-scrollbar-thumb {
-    background:
-        rgba(100, 190, 160, 0.18);
+*::-webkit-scrollbar-track {
 
-    border-radius: 10px;
+    background:
+        #0b131b;
+
 }
 
-::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb {
+
     background:
-        rgba(100, 220, 180, 0.3);
+        #365164;
+
+    border:
+        2px solid #0b131b;
+
+    border-radius:
+        6px;
+
+}
+
+*::-webkit-scrollbar-thumb:hover {
+
+    background:
+        #4b7087;
+
+}
+
+
+/* ============================================================
+   ВЫДЕЛЕНИЕ
+   ============================================================ */
+
+::selection {
+
+    background:
+        #24516a;
+
+    color:
+        #eefaff;
+
+}
+
+
+/* ============================================================
+   УЗКИЙ ЭКРАН
+   ============================================================ */
+
+@media (max-width: 1000px) {
+
+    .логотип {
+
+        min-width:
+            180px;
+
+    }
+
+    .кнопка {
+
+        padding:
+            0 9px;
+
+    }
+
+    .рабочая-область {
+
+        grid-template-columns:
+
+            minmax(150px, var(--ширина-проекта))
+
+            var(--размер-разделителя)
+
+            minmax(260px, 1fr)
+
+            var(--размер-разделителя)
+
+            minmax(190px, var(--ширина-наблюдения));
+
+    }
+
+}
+
+@media (max-width: 820px) {
+
+    #приложение {
+
+        grid-template-rows:
+
+            64px
+
+            minmax(260px, 1fr)
+
+            var(--размер-разделителя)
+
+            minmax(140px, var(--высота-консоли))
+
+            34px;
+
+    }
+
+    .верхняя-панель {
+
+        gap:
+            8px;
+
+        padding:
+            0 10px;
+
+    }
+
+    .логотип {
+
+        min-width:
+            145px;
+
+    }
+
+    .логотип-значок {
+
+        width:
+            34px;
+
+        height:
+            34px;
+
+        font-size:
+            18px;
+
+    }
+
+    .логотип-название {
+
+        font-size:
+            13px;
+
+    }
+
+    .логотип-подпись {
+
+        display:
+            none;
+
+    }
+
+    .панель-проекта {
+
+        display:
+            none;
+
+    }
+
+    .кнопки-запуска {
+
+        margin-left:
+            auto;
+
+    }
+
+    .кнопка {
+
+        min-height:
+            31px;
+
+        padding:
+            0 8px;
+
+        font-size:
+            11px;
+
+    }
+
 }

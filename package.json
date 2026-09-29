@@ -1,22 +1,23 @@
 {
-  "name": "ulitka",
-  "version": "0.1.0",
-  "description": "Компилятор русского языка программирования «Улитка»",
-  "keywords": [
-    "русский",
-    "язык",
-    "программирование",
-    "компилятор",
-    "улитка"
-  ],
-  "author": "Владимир",
-  "license": "MIT",
-  "scripts": {
-    "dev": "vite"
-  },
-  "devDependencies": {
-    "@types/node": "^26.4.0",
-    "typescript": "^7.0.2",
-    "vite": "^8.2.2"
-  }
+    "name": "ulitka",
+    "version": "0.1.0",
+    "description": "Компилятор русского языка программирования «Улитка»",
+    "keywords": [
+        "русский",
+        "язык",
+        "программирование",
+        "компилятор",
+        "улитка"
+    ],
+    "author": "Владимир",
+    "license": "MIT",
+    "scripts": {
+        "dev": "vite --host 127.0.0.1 --open",
+        "улитка": "powershell -ExecutionPolicy Bypass -File \"./запуск_улитки.ps1\""
+    },
+    "devDependencies": {
+        "@types/node": "^26.4.0",
+        "typescript": "^7.0.2",
+        "vite": "^8.2.2"
+    }
 }
