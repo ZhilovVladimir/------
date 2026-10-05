@@ -174,23 +174,31 @@
                 <div
                     id="номера-строк"
                     class="номер-строки"
-                >
-                    1<br>
-                    2<br>
-                    3<br>
-                    4<br>
-                    5<br>
-                    6<br>
-                    7
-                </div>
+                    aria-hidden="true"
+                ></div>
 
-                <pre
-                    id="код"
-                    contenteditable="true"
-                    spellcheck="false"
-                    role="textbox"
-                    aria-label="Исходный код программы «Улитка»"
-                >программа пример
+                <div
+                    class="поле-редактора"
+                    id="поле-редактора"
+                >
+
+                    <pre
+                        id="подсветка-кода"
+                        class="подсветка-кода"
+                        aria-hidden="true"
+                    ></pre>
+
+                    <textarea
+                        id="редактор-исходного-кода"
+                        class="редактор-исходного-кода"
+                        spellcheck="false"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        wrap="off"
+                        aria-label="Исходный код программы «Улитка»"
+                        aria-multiline="true"
+                    >программа пример
 
 начало
 
@@ -198,7 +206,9 @@
 
 показать имя
 
-конец</pre>
+конец</textarea>
+
+                </div>
 
             </div>
 
