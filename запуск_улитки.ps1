@@ -1,16 +1,13 @@
-﻿# ============================================================
-# 🐌 УЛИТКА
-# Скрытый запуск браузерного терминала
-# ============================================================
+$ErrorActionPreference = "Stop"
 
-$корень = "D:\Улитка"
+$корень = $PSScriptRoot
+$exe = Join-Path $корень "node_modules\electron\dist\electron.exe"
+
+if (-not (Test-Path -LiteralPath $exe)) {
+    throw "Не найден Electron. Выполни npm install и npx install-electron --no."
+}
 
 Start-Process `
-    -FilePath "npm.cmd" `
-    -ArgumentList "run", "dev" `
-    -WorkingDirectory $корень `
-    -WindowStyle Hidden
-
-Write-Host "🐌 Терминал «Улитки» запускается..."
-Write-Host "✓ Сервер запущен отдельно от терминала VS Code."
-Write-Host "✓ Окно PowerShell для сервера не требуется."
+    -FilePath $exe `
+    -ArgumentList ('"' + $корень + '"') `
+    -WorkingDirectory $корень

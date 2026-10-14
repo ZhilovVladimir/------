@@ -510,6 +510,7 @@ function обновитьНомераСтрок(
         const строка =
             document.createElement("div");
 
+        строка.className = "номер";
         строка.textContent =
             String(номер);
 
