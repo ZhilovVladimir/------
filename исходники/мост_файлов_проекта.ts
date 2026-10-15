@@ -6,6 +6,7 @@
  */
 
 import {
+    mkdir,
     realpath,
     readdir,
     readFile,
@@ -92,7 +93,10 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
         ".содержимое-папки { margin-left: 12px; border-left: 1px solid #243949; padding-left: 4px; }",
         ".состояние-дерева-проекта { padding: 8px; color: #8fa7b8; font-size: 11px; white-space: pre-wrap; }",
         ".имя-файла-дерева { display: block; }",
-        ".элемент-дерева:focus-visible { outline: 1px solid #71b7e6; outline-offset: -1px; }"
+        ".элемент-дерева:focus-visible { outline: 1px solid #71b7e6; outline-offset: -1px; }",
+        ".панель-дерева { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px; border-bottom: 1px solid #243949; }",
+        ".кнопка-панели-дерева { padding: 5px 8px; border: 1px solid #36566b; border-radius: 4px; background: #172936; color: #c8dbe8; cursor: pointer; font: inherit; font-size: 11px; }",
+        ".кнопка-панели-дерева:hover { background: #25465a; color: #ffffff; }"
     ].join("\n");
 
     document.head.appendChild(стиль);
@@ -265,6 +269,32 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
 
             корень.replaceChildren();
 
+            const панель = document.createElement("div");
+            панель.className = "панель-дерева";
+
+            function добавитьКнопкуПанели(надпись, действие) {
+                const кнопка = document.createElement("button");
+                кнопка.type = "button";
+                кнопка.className = "кнопка-панели-дерева";
+                кнопка.textContent = надпись;
+                кнопка.addEventListener("click", действие);
+                панель.appendChild(кнопка);
+            }
+
+            добавитьКнопкуПанели("Файл +", () => {
+                void создатьЭлемент("файл");
+            });
+
+            добавитьКнопкуПанели("Папка +", () => {
+                void создатьЭлемент("папка");
+            });
+
+            добавитьКнопкуПанели("Обновить", () => {
+                void загрузитьКорень();
+            });
+
+            корень.appendChild(панель);
+
             for (const элемент of данные.элементы) {
                 if (
                     !элемент ||
@@ -311,6 +341,208 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
         }
     }
 
+    function запроситьИмяЭлемента(тип) {
+        return new Promise((resolve) => {
+            const слой = document.createElement("div");
+            слой.style.cssText = [
+                "position:fixed",
+                "inset:0",
+                "z-index:100000",
+                "display:flex",
+                "align-items:center",
+                "justify-content:center",
+                "padding:20px",
+                "background:rgba(0,0,0,0.72)"
+            ].join(";");
+
+            const форма = document.createElement("form");
+            форма.setAttribute("role", "dialog");
+            форма.setAttribute("aria-modal", "true");
+            форма.setAttribute("aria-labelledby", "заголовок-окна-создания");
+            форма.style.cssText = [
+                "width:100%",
+                "max-width:380px",
+                "box-sizing:border-box",
+                "padding:22px",
+                "border:1px solid #36566b",
+                "border-radius:8px",
+                "background:#101c27",
+                "color:#d6e4ec",
+                "box-shadow:0 16px 48px rgba(0,0,0,0.5)",
+                "font:inherit"
+            ].join(";");
+
+            const заголовок = document.createElement("div");
+            заголовок.id = "заголовок-окна-создания";
+            заголовок.textContent = тип === "файл"
+                ? "Создание файла"
+                : "Создание папки";
+            заголовок.style.cssText =
+                "font-size:16px;font-weight:600;margin-bottom:10px";
+
+            const описание = document.createElement("div");
+            описание.textContent = тип === "файл"
+                ? "Введите имя файла вместе с расширением."
+                : "Введите имя новой папки.";
+            описание.style.cssText =
+                "font-size:12px;color:#9bb0bf;margin-bottom:12px";
+
+            const поле = document.createElement("input");
+            поле.type = "text";
+            поле.name = "имя";
+            поле.required = true;
+            поле.maxLength = 120;
+            поле.autocomplete = "off";
+            поле.placeholder = тип === "файл"
+                ? "тест_редактора.txt"
+                : "новая_папка";
+            поле.setAttribute("aria-label", "Имя нового элемента");
+            поле.style.cssText = [
+                "display:block",
+                "box-sizing:border-box",
+                "width:100%",
+                "padding:10px",
+                "border:1px solid #36566b",
+                "border-radius:5px",
+                "outline:none",
+                "background:#0b141d",
+                "color:#e7f4fb",
+                "font:inherit",
+                "font-size:13px"
+            ].join(";");
+
+            const кнопки = document.createElement("div");
+            кнопки.style.cssText =
+                "display:flex;justify-content:flex-end;gap:8px;margin-top:18px";
+
+            const отмена = document.createElement("button");
+            отмена.type = "button";
+            отмена.textContent = "Отмена";
+            отмена.style.cssText =
+                "padding:8px 12px;border:1px solid #36566b;border-radius:5px;background:#172936;color:#c8dbe8;cursor:pointer;font:inherit";
+
+            const создать = document.createElement("button");
+            создать.type = "submit";
+            создать.textContent = "Создать";
+            создать.style.cssText =
+                "padding:8px 12px;border:1px solid #3979a0;border-radius:5px;background:#245675;color:#ffffff;cursor:pointer;font:inherit";
+
+            кнопки.append(отмена, создать);
+            форма.append(заголовок, описание, поле, кнопки);
+            слой.appendChild(форма);
+
+            let завершено = false;
+
+            function закрыть(значение) {
+                if (завершено) {
+                    return;
+                }
+
+                завершено = true;
+                document.removeEventListener("keydown", обработатьКлавишу);
+                слой.remove();
+                resolve(значение);
+            }
+
+            function обработатьКлавишу(событие) {
+                if (событие.key === "Escape") {
+                    событие.preventDefault();
+                    закрыть(null);
+                }
+            }
+
+            поле.addEventListener("input", () => {
+                поле.setCustomValidity("");
+            });
+
+            форма.addEventListener("submit", (событие) => {
+                событие.preventDefault();
+
+                const имя = поле.value.trim();
+
+                if (!имя) {
+                    поле.setCustomValidity("Введите имя файла или папки.");
+                    поле.reportValidity();
+                    return;
+                }
+
+                закрыть(имя);
+            });
+
+            отмена.addEventListener("click", () => {
+                закрыть(null);
+            });
+
+            слой.addEventListener("click", (событие) => {
+                if (событие.target === слой) {
+                    закрыть(null);
+                }
+            });
+
+            document.addEventListener("keydown", обработатьКлавишу);
+            document.body.appendChild(слой);
+            поле.focus();
+        });
+    }
+    async function создатьЭлемент(тип) {
+
+        const имя = await запроситьИмяЭлемента(тип);
+
+        if (имя === null) {
+            return;
+        }
+
+        const чистоеИмя = имя.trim();
+
+        if (!чистоеИмя) {
+            показатьСостояние("Имя не может быть пустым.");
+            return;
+        }
+
+        try {
+            показатьСостояние("Создаю элемент: " + чистоеИмя);
+
+            const данные = await запроситьJSON(
+                тип === "файл" ? "/api/создать-файл" : "/api/создать-папку",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json; charset=utf-8"
+                    },
+                    body: JSON.stringify({ имя: чистоеИмя })
+                }
+            );
+
+            await загрузитьКорень();
+
+            if (тип === "файл" && typeof данные.путь === "string") {
+                const кнопки = Array.from(
+                    корень.querySelectorAll("button[data-тип='файл']")
+                );
+
+                const новаяКнопка = кнопки.find(
+                    (кнопка) => кнопка.dataset.путь === данные.путь
+                );
+
+                if (новаяКнопка) {
+                    await открытьФайл(данные.путь, новаяКнопка);
+                } else {
+                    показатьСостояние(данные.сообщение || "Файл создан.");
+                }
+            } else {
+                показатьСостояние(данные.сообщение || "Папка создана.");
+            }
+        } catch (ошибка) {
+            показатьСостояние(
+                "Не удалось создать элемент:\n" +
+                (ошибка instanceof Error ? ошибка.message : String(ошибка))
+            );
+        }
+    }
+
+    let таймерАвтосохранения = null;
+    let повторитьСохранение = false;
+
     async function сохранитьФайл() {
         if (!открытыйПуть) {
             показатьСостояние("Сначала открой файл в дереве проекта.");
@@ -318,17 +550,17 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
         }
 
         if (сохраняется) {
+            повторитьСохранение = true;
             return;
         }
 
         if (редактор.value === исходноеСодержимое) {
-            показатьСостояние("Изменений нет.");
+            показатьСостояние("Все изменения сохранены.");
             return;
         }
 
-        if (!window.confirm("Сохранить изменения в файле «" + открытыйПуть + "»?")) {
-            return;
-        }
+        const путьДляСохранения = открытыйПуть;
+        const содержимоеДляСохранения = редактор.value;
 
         try {
             сохраняется = true;
@@ -340,13 +572,21 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
                     "Content-Type": "application/json; charset=utf-8"
                 },
                 body: JSON.stringify({
-                    путь: открытыйПуть,
-                    содержимое: редактор.value
+                    путь: путьДляСохранения,
+                    содержимое: содержимоеДляСохранения
                 })
             });
 
-            исходноеСодержимое = редактор.value;
-            показатьСостояние("Файл сохранён: " + открытыйПуть);
+            if (открытыйПуть === путьДляСохранения) {
+                исходноеСодержимое = содержимоеДляСохранения;
+
+                if (редактор.value === исходноеСодержимое) {
+                    показатьСостояние("Файл сохранён: " + путьДляСохранения);
+                } else {
+                    показатьСостояние("Сохраняю новые изменения…");
+                    повторитьСохранение = true;
+                }
+            }
         } catch (ошибка) {
             показатьСостояние(
                 "Не удалось сохранить файл:\n" +
@@ -354,9 +594,38 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
             );
         } finally {
             сохраняется = false;
+
+            if (повторитьСохранение) {
+                повторитьСохранение = false;
+
+                if (
+                    открытыйПуть &&
+                    редактор.value !== исходноеСодержимое
+                ) {
+                    setTimeout(() => {
+                        void сохранитьФайл();
+                    }, 100);
+                }
+            }
         }
     }
 
+    редактор.addEventListener("input", () => {
+        if (!открытыйПуть) {
+            return;
+        }
+
+        if (таймерАвтосохранения !== null) {
+            clearTimeout(таймерАвтосохранения);
+        }
+
+        показатьСостояние("Есть несохранённые изменения…");
+
+        таймерАвтосохранения = setTimeout(() => {
+            таймерАвтосохранения = null;
+            void сохранитьФайл();
+        }, 500);
+    });
     document.addEventListener("keydown", (событие) => {
         if ((событие.ctrlKey || событие.metaKey) && событие.key.toLowerCase() === "s") {
             событие.preventDefault();
@@ -516,7 +785,9 @@ export function создатьМостФайловПроекта(): Plugin {
 
                 if (
                     путьЗапроса !== "/api/файлы" &&
-                    путьЗапроса !== "/api/файл"
+                    путьЗапроса !== "/api/файл" &&
+                    путьЗапроса !== "/api/создать-файл" &&
+                    путьЗапроса !== "/api/создать-папку"
                 ) {
                     следующий();
                     return;
@@ -524,6 +795,104 @@ export function создатьМостФайловПроекта(): Plugin {
 
                 void (async () => {
                     try {
+                        if (
+                            (путьЗапроса === "/api/создать-файл" ||
+                                путьЗапроса === "/api/создать-папку") &&
+                            запрос.method === "POST"
+                        ) {
+                            const тело = await прочитатьТело(запрос);
+
+                            if (
+                                typeof тело !== "object" ||
+                                тело === null ||
+                                !("имя" in тело) ||
+                                typeof тело.имя !== "string"
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Не указано имя нового элемента."
+                                });
+                                return;
+                            }
+
+                            const имя = тело.имя.trim();
+                            const этоФайл = путьЗапроса === "/api/создать-файл";
+
+                            if (
+                                имя.length === 0 ||
+                                имя.length > 120 ||
+                                имя === "." ||
+                                имя === ".." ||
+                                имя.includes("/") ||
+                                имя.includes("\\") ||
+                                /[<>:"|?*\x00-\x1F]/.test(имя) ||
+                                /[. ]$/.test(имя) ||
+                                /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(имя)
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Имя содержит недопустимые символы или запрещено Windows."
+                                });
+                                return;
+                            }
+
+                            if (этоФайл && !разрешённыйТекстовыйФайл(имя)) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Укажите поддерживаемое текстовое расширение, например .ts, .txt или .md."
+                                });
+                                return;
+                            }
+
+                            if (
+                                !этоФайл &&
+                                (
+                                    имя.startsWith(".") ||
+                                    СЛУЖЕБНЫЕ_КАТАЛОГИ.has(имя)
+                                )
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Это имя папки зарезервировано."
+                                });
+                                return;
+                            }
+
+                            const новыйПуть = путьВнутриПроекта(имя);
+
+                            if (
+                                relative(
+                                    КОРЕНЬ_ПРОЕКТА,
+                                    resolve(КОРЕНЬ_ПРОЕКТА, имя)
+                                ) !== имя
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Разрешено создавать элементы только в корне проекта."
+                                });
+                                return;
+                            }
+
+                            if (этоФайл) {
+                                await writeFile(
+                                    новыйПуть,
+                                    "",
+                                    { encoding: "utf8", flag: "wx" }
+                                );
+                            } else {
+                                await mkdir(новыйПуть);
+                            }
+
+                            отправитьJSON(ответ, 201, {
+                                успешно: true,
+                                путь: имя,
+                                сообщение: этоФайл
+                                    ? "Файл создан."
+                                    : "Папка создана."
+                            });
+                            return;
+                        }
+
                         if (
                             путьЗапроса === "/api/файлы" &&
                             запрос.method === "GET"
