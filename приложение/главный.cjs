@@ -1,6 +1,6 @@
-"use strict";
+﻿"use strict";
 
-const { app, BrowserWindow, Menu, dialog } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");
@@ -12,6 +12,7 @@ const API_ФАЙЛОВ = "/api/%D1%84%D0%B0%D0%B9%D0%BB%D1%8B";
 const ИКОНКА = path.join(КОРЕНЬ, "FolderStylerIcon.ico");
 
 let окно = null;
+let РАБОЧАЯ_ПАПКА = КОРЕНЬ;
 let серверVite = null;
 let серверЗапущенПриложением = false;
 let журнал = null;
@@ -33,6 +34,155 @@ if (!первыйЗапуск) {
             окно.focus();
         }
     });
+
+
+// Безопасный системный выбор рабочей папки.
+ipcMain.handle("улитка:выбрать-папку", async (событие) => {
+    if (!окно || событие.sender !== окно.webContents) {
+        throw new Error("Запрос выбора папки поступил от неизвестного окна.");
+    }
+
+    const результат = await dialog.showOpenDialog(окно, {
+        title: "Выберите рабочую папку для «Улитки»",
+        buttonLabel: "Выбрать папку",
+        properties: ["openDirectory", "createDirectory"]
+    });
+
+    if (результат.canceled || результат.filePaths.length === 0) {
+        return null;
+    }
+
+    const выбраннаяПапка = await fs.promises.realpath(
+        результат.filePaths[0]
+    );
+
+    const сведения = await fs.promises.stat(выбраннаяПапка);
+
+    if (!сведения.isDirectory()) {
+        throw new Error("Выбранный путь не является папкой.");
+    }
+
+    РАБОЧАЯ_ПАПКА = выбраннаяПапка;
+
+    return выбраннаяПапка;
+});
+
+// Синхронизация рабочего пути с файловым деревом.
+ipcMain.handle(
+    "улитка:синхронизировать-рабочую-папку",
+    async (событие, путь) => {
+        if (!окно || событие.sender !== окно.webContents) {
+            throw new Error("Запрос смены рабочей папки поступил от неизвестного окна.");
+        }
+
+        if (typeof путь !== "string" || !path.isAbsolute(путь)) {
+            throw new Error("Указан некорректный путь рабочей папки.");
+        }
+
+        const настоящийПуть = await fs.promises.realpath(путь);
+        const сведения = await fs.promises.stat(настоящийПуть);
+
+        if (!сведения.isDirectory()) {
+            throw new Error("Рабочий путь не является папкой.");
+        }
+
+        РАБОЧАЯ_ПАПКА = настоящийПуть;
+
+        записатьЖурнал(
+            "\nРабочая папка Electron: " + РАБОЧАЯ_ПАПКА + "\n"
+        );
+
+        return РАБОЧАЯ_ПАПКА;
+    }
+);
+
+// Безопасное перемещение элемента в корзину Windows.
+ipcMain.handle("улитка:переместить-в-корзину", async (событие, путь) => {
+    if (!окно || событие.sender !== окно.webContents) {
+        throw new Error("Запрос удаления поступил от неизвестного окна.");
+    }
+
+    if (
+        typeof путь !== "string" ||
+        путь.length === 0 ||
+        path.isAbsolute(путь) ||
+        путь.includes("\0")
+    ) {
+        throw new Error("Указан некорректный относительный путь.");
+    }
+
+    const полныйПуть = path.resolve(РАБОЧАЯ_ПАПКА, путь);
+    const относительныйПуть = path.relative(
+        РАБОЧАЯ_ПАПКА,
+        полныйПуть
+    );
+
+    if (
+        !относительныйПуть ||
+        относительныйПуть === ".." ||
+        относительныйПуть.startsWith(".." + path.sep) ||
+        path.isAbsolute(относительныйПуть)
+    ) {
+        throw new Error("Нельзя удалять корень или элементы вне рабочей папки.");
+    }
+
+    const защищённыеКаталоги = new Set([
+        ".git",
+        ".vite",
+        "node_modules",
+        "dist"
+    ]);
+
+    if (
+        относительныйПуть
+            .split(/[\\/]+/)
+            .some(часть => защищённыеКаталоги.has(часть.toLowerCase()))
+    ) {
+        throw new Error("Нельзя перемещать служебные каталоги в корзину.");
+    }
+
+    const сведенияДоПроверки = await fs.promises.lstat(полныйПуть);
+
+    if (сведенияДоПроверки.isSymbolicLink()) {
+        throw new Error("Символические ссылки удалять через дерево запрещено.");
+    }
+
+    const настоящийКорень = await fs.promises.realpath(РАБОЧАЯ_ПАПКА);
+    const настоящийПуть = await fs.promises.realpath(полныйПуть);
+    const относительныйНастоящийПуть = path.relative(
+        настоящийКорень,
+        настоящийПуть
+    );
+
+    if (
+        !относительныйНастоящийПуть ||
+        относительныйНастоящийПуть === ".." ||
+        относительныйНастоящийПуть.startsWith(".." + path.sep) ||
+        path.isAbsolute(относительныйНастоящийПуть)
+    ) {
+        throw new Error("Проверка безопасности пути не пройдена.");
+    }
+
+    await shell.trashItem(настоящийПуть);
+
+    // После перемещения в корзину оставляем «Улитку» открытой.
+    if (окно && !окно.isDestroyed()) {
+        if (окно.isMinimized()) {
+            окно.restore();
+        }
+
+        if (!окно.isVisible()) {
+            окно.show();
+        }
+
+        окно.focus();
+    }
+
+    return {
+        успешно: true,
+        сообщение: "Элемент перемещён в корзину Windows."
+    };
+});
 
     function задержка(миллисекунды) {
         return new Promise(resolve => setTimeout(resolve, миллисекунды));
@@ -285,6 +435,7 @@ if (!первыйЗапуск) {
             backgroundColor: "#07111a",
             icon: fs.existsSync(ИКОНКА) ? ИКОНКА : undefined,
             webPreferences: {
+                preload: path.join(__dirname, "предзагрузка.cjs"),
                 nodeIntegration: false,
                 contextIsolation: true,
                 sandbox: true

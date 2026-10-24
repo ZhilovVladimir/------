@@ -10,22 +10,32 @@ import {
     realpath,
     readdir,
     readFile,
+    cp,
+    lstat,
     stat,
     writeFile,
 } from "node:fs/promises";
 
 import {
+    basename,
     isAbsolute,
+    join,
     relative,
     resolve,
     sep,
 } from "node:path";
 
 import type {
+    IncomingMessage,
+    ServerResponse,
+} from "node:http";
+
+import type {
     Plugin,
 } from "vite";
 
-const КОРЕНЬ_ПРОЕКТА = resolve(process.cwd());
+let КОРЕНЬ_ПРОЕКТА = resolve(process.cwd());
+
 const МАКСИМАЛЬНЫЙ_РАЗМЕР_ФАЙЛА = 2 * 1024 * 1024;
 
 const СЛУЖЕБНЫЕ_КАТАЛОГИ = new Set([
@@ -63,583 +73,1353 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
     "use strict";
 
     function инициализироватьДерево() {
+        const корень = document.querySelector(".дерево-проекта");
+        const редактор = document.getElementById("редактор-исходного-кода");
 
-    const корень = document.querySelector(".дерево-проекта");
-    const редактор = document.getElementById("редактор-исходного-кода");
-
-    if (!корень || !(редактор instanceof HTMLTextAreaElement)) {
-        console.error("🐌 Дерево проекта: не найдены корень дерева или редактор.");
-        return;
-    }
-
-    let открытыйПуть = null;
-    let исходноеСодержимое = "";
-    let сохраняется = false;
-
-    const состояние = document.createElement("div");
-    состояние.className = "состояние-дерева-проекта";
-    состояние.setAttribute("role", "status");
-    состояние.textContent = "Загрузка файлов проекта…";
-
-    корень.replaceChildren();
-    корень.appendChild(состояние);
-
-    const стиль = document.createElement("style");
-    стиль.textContent = [
-        ".дерево-проекта { overflow: auto; min-height: 80px; }",
-        ".элемент-дерева { box-sizing: border-box; width: 100%; padding: 5px 7px; border: 0; border-radius: 4px; background: transparent; color: #b8c9d6; text-align: left; font: inherit; font-size: 12px; cursor: pointer; overflow-wrap: anywhere; }",
-        ".элемент-дерева:hover { background: #182a38; color: #ffffff; }",
-        ".элемент-дерева.выбран { background: #203b4e; color: #ffffff; }",
-        ".содержимое-папки { margin-left: 12px; border-left: 1px solid #243949; padding-left: 4px; }",
-        ".состояние-дерева-проекта { padding: 8px; color: #8fa7b8; font-size: 11px; white-space: pre-wrap; }",
-        ".имя-файла-дерева { display: block; }",
-        ".элемент-дерева:focus-visible { outline: 1px solid #71b7e6; outline-offset: -1px; }",
-        ".панель-дерева { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px; border-bottom: 1px solid #243949; }",
-        ".кнопка-панели-дерева { padding: 5px 8px; border: 1px solid #36566b; border-radius: 4px; background: #172936; color: #c8dbe8; cursor: pointer; font: inherit; font-size: 11px; }",
-        ".кнопка-панели-дерева:hover { background: #25465a; color: #ffffff; }"
-    ].join("\n");
-
-    document.head.appendChild(стиль);
-
-    function показатьСостояние(текст) {
-        состояние.textContent = текст;
-    }
-
-    async function запроситьJSON(адрес, настройки) {
-        const ответ = await fetch(адрес, настройки);
-        let данные;
-
-        try {
-            данные = await ответ.json();
-        } catch {
-            throw new Error("Сервер вернул ответ, который не удалось прочитать.");
-        }
-
-        if (!ответ.ok || данные.успешно === false) {
-            throw new Error(данные.сообщение || "Не удалось выполнить запрос.");
-        }
-
-        return данные;
-    }
-
-    function создатьКнопку(имя, путь, тип, отступ) {
-        const кнопка = document.createElement("button");
-        кнопка.type = "button";
-        кнопка.className = "элемент-дерева";
-        кнопка.style.paddingLeft = (7 + отступ * 12) + "px";
-        кнопка.dataset.путь = путь;
-        кнопка.dataset.тип = тип;
-
-        const значок = тип === "папка" ? "📁 " : "📄 ";
-        кнопка.textContent = значок + имя;
-        кнопка.title = путь;
-
-        return кнопка;
-    }
-
-    async function открытьФайл(путь, кнопка) {
-        try {
-            показатьСостояние("Открываю файл…");
-
-            const данные = await запроситьJSON(
-                "/api/файл?путь=" + encodeURIComponent(путь)
-            );
-
-            if (typeof данные.содержимое !== "string") {
-                throw new Error("Сервер не вернул текст файла.");
-            }
-
-            редактор.value = данные.содержимое;
-            редактор.dispatchEvent(new Event("input", { bubbles: true }));
-            открытыйПуть = путь;
-            исходноеСодержимое = данные.содержимое;
-
-            корень.querySelectorAll(".элемент-дерева.выбран")
-                .forEach((элемент) => элемент.classList.remove("выбран"));
-
-            кнопка.classList.add("выбран");
-            показатьСостояние("Открыт файл: " + путь);
-            редактор.focus();
-
-            document.dispatchEvent(new CustomEvent("улитка:файл-открыт", {
-                detail: { путь: путь }
-            }));
-        } catch (ошибка) {
-            показатьСостояние(
-                "Не удалось открыть файл:\n" +
-                (ошибка instanceof Error ? ошибка.message : String(ошибка))
-            );
-        }
-    }
-
-    async function раскрытьПапку(путь, кнопка, отступ) {
-        const ужеРаскрыта = кнопка.getAttribute("aria-expanded") === "true";
-        const существующийБлок = кнопка.nextElementSibling;
-
-        if (ужеРаскрыта && существующийБлок) {
-            существующийБлок.remove();
-            кнопка.setAttribute("aria-expanded", "false");
-            кнопка.textContent = "📁 " + путь.split("/").pop();
+        if (!корень || !(редактор instanceof HTMLTextAreaElement)) {
+            console.error("🐌 Дерево проекта: не найдены корень дерева или редактор.");
             return;
         }
 
-        try {
-            кнопка.disabled = true;
-            показатьСостояние("Читаю папку: " + путь);
+        let открытыйПуть = null;
+        let исходноеСодержимое = "";
+        let сохраняется = false;
+        let таймерАвтосохранения = null;
+        let повторитьСохранение = false;
+        let путьРабочейПапки = "";
 
-            const данные = await запроситьJSON(
-                "/api/файлы?путь=" + encodeURIComponent(путь)
-            );
+        // Внутренний буфер копирования элементов дерева.
+        let путиДляКопирования = [];
 
-            if (!Array.isArray(данные.элементы)) {
-                throw new Error("Сервер вернул некорректный список файлов.");
-            }
+        // Множественное выделение элементов дерева.
+        const выбранныеПути = new Set();
+        let последнийВыбранныйПуть = null;
 
-            const блок = document.createElement("div");
-            блок.className = "содержимое-папки";
+        const состояние = document.createElement("div");
+        состояние.className = "состояние-дерева-проекта";
+        состояние.setAttribute("role", "status");
+        состояние.textContent = "Загрузка файлов проекта…";
 
-            if (данные.элементы.length === 0) {
-                const пусто = document.createElement("div");
-                пусто.className = "состояние-дерева-проекта";
-                пусто.textContent = "Папка пуста";
-                блок.appendChild(пусто);
-            } else {
-                for (const элемент of данные.элементы) {
-                    if (
-                        !элемент ||
-                        typeof элемент.имя !== "string" ||
-                        typeof элемент.путь !== "string" ||
-                        (элемент.тип !== "папка" && элемент.тип !== "файл")
-                    ) {
-                        continue;
-                    }
+        корень.replaceChildren(состояние);
 
-                    const дочерняяКнопка = создатьКнопку(
-                        элемент.имя,
-                        элемент.путь,
-                        элемент.тип,
-                        отступ + 1
-                    );
+        const стиль = document.createElement("style");
+        стиль.textContent = [
+            ".дерево-проекта { overflow: auto; min-height: 80px; }",
+            ".элемент-дерева { box-sizing: border-box; width: 100%; padding: 5px 7px; border: 0; border-radius: 4px; background: transparent; color: #b8c9d6; text-align: left; font: inherit; font-size: 12px; cursor: pointer; overflow-wrap: anywhere; }",
+            ".элемент-дерева:hover { background: #182a38; color: #fff; }",
+            ".элемент-дерева.выбран { background: #203b4e; color: #fff; }",
+            ".элемент-дерева.выделен { background: #31536b; color: #fff; outline: 1px solid #527b96; }",
+            ".содержимое-папки { margin-left: 12px; border-left: 1px solid #243949; padding-left: 4px; }",
+            ".состояние-дерева-проекта { padding: 8px; color: #8fa7b8; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }",
+            ".панель-дерева { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px; border-bottom: 1px solid #243949; }",
+            ".кнопка-панели-дерева { padding: 5px 8px; border: 1px solid #36566b; border-radius: 4px; background: #172936; color: #c8dbe8; cursor: pointer; font: inherit; font-size: 11px; }",
+            ".кнопка-панели-дерева:hover { background: #25465a; color: #fff; }",
+            ".кнопка-панели-дерева:disabled { opacity: .55; cursor: wait; }",
+            ".элемент-дерева:focus-visible { outline: 1px solid #71b7e6; outline-offset: -1px; }",
+            ".меню-дерева { position: fixed; z-index: 99999; min-width: 210px; max-width: calc(100vw - 16px); padding: 5px; border: 1px solid #36566b; border-radius: 6px; background: #14232f; box-shadow: 0 8px 24px #0008; }",
+            ".пункт-меню-дерева { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 4px; background: transparent; color: #d7e6ef; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }",
+            ".пункт-меню-дерева:hover { background: #25465a; color: #fff; }",
+            ".пункт-меню-дерева.опасное { color: #ff9b9b; }"
+        ].join("\n");
 
-                    if (элемент.тип === "папка") {
-                        дочерняяКнопка.setAttribute("aria-expanded", "false");
-                        дочерняяКнопка.addEventListener("click", () => {
-                            void раскрытьПапку(
-                                элемент.путь,
-                                дочерняяКнопка,
-                                отступ + 1
-                            );
-                        });
-                    } else {
-                        дочерняяКнопка.addEventListener("click", () => {
-                            void открытьФайл(элемент.путь, дочерняяКнопка);
-                        });
-                    }
+        document.head.appendChild(стиль);
 
-                    блок.appendChild(дочерняяКнопка);
-                }
-            }
-
-            const прежнийБлок = кнопка.nextElementSibling;
-            if (прежнийБлок) {
-                прежнийБлок.remove();
-            }
-
-            кнопка.after(блок);
-            кнопка.setAttribute("aria-expanded", "true");
-            кнопка.textContent = "📂 " + путь.split("/").pop();
-            показатьСостояние("Файлов найдено: " + данные.элементы.length);
-        } catch (ошибка) {
-            показатьСостояние(
-                "Не удалось прочитать папку:\n" +
-                (ошибка instanceof Error ? ошибка.message : String(ошибка))
-            );
-        } finally {
-            кнопка.disabled = false;
+        function показатьСостояние(текст) {
+            состояние.textContent = текст;
         }
-    }
 
-    async function загрузитьКорень() {
-        try {
-            const данные = await запроситьJSON("/api/файлы?путь=");
+        async function запроситьJSON(адрес, настройки) {
+            const ответ = await fetch(адрес, настройки);
+            let данные;
 
-            if (!Array.isArray(данные.элементы)) {
-                throw new Error("Сервер вернул некорректный список файлов.");
+            try {
+                данные = await ответ.json();
+            } catch {
+                throw new Error("Сервер вернул ответ, который не удалось прочитать.");
             }
 
-            корень.replaceChildren();
-
-            const панель = document.createElement("div");
-            панель.className = "панель-дерева";
-
-            function добавитьКнопкуПанели(надпись, действие) {
-                const кнопка = document.createElement("button");
-                кнопка.type = "button";
-                кнопка.className = "кнопка-панели-дерева";
-                кнопка.textContent = надпись;
-                кнопка.addEventListener("click", действие);
-                панель.appendChild(кнопка);
+            if (!ответ.ok || данные.успешно === false) {
+                throw new Error(данные.сообщение || "Не удалось выполнить запрос.");
             }
 
-            добавитьКнопкуПанели("Файл +", () => {
-                void создатьЭлемент("файл");
+            return данные;
+        }
+
+        let открытоеКонтекстноеМеню = null;
+
+        function закрытьКонтекстноеМеню() {
+            if (открытоеКонтекстноеМеню) {
+                открытоеКонтекстноеМеню.remove();
+                открытоеКонтекстноеМеню = null;
+            }
+        }
+
+        function очиститьВыделение() {
+            выбранныеПути.clear();
+
+            корень.querySelectorAll(".элемент-дерева.выделен")
+                .forEach((элемент) => элемент.classList.remove("выделен"));
+        }
+
+        function выделитьПуть(путь) {
+            const кнопка = Array.from(
+                корень.querySelectorAll(".элемент-дерева")
+            ).find((элемент) => элемент.dataset.путь === путь);
+
+            if (кнопка) {
+                выбранныеПути.add(путь);
+                кнопка.classList.add("выделен");
+            }
+        }
+
+        function получитьПутиДляКопирования(путьКонтекстногоЭлемента) {
+            if (
+                выбранныеПути.has(путьКонтекстногоЭлемента) &&
+                выбранныеПути.size > 0
+            ) {
+                return Array.from(выбранныеПути);
+            }
+
+            очиститьВыделение();
+            выделитьПуть(путьКонтекстногоЭлемента);
+            последнийВыбранныйПуть = путьКонтекстногоЭлемента;
+
+            return [путьКонтекстногоЭлемента];
+        }
+
+        // Копирование абсолютных путей в системный буфер Windows.
+        async function скопироватьПутиВWindows(пути) {
+            if (!Array.isArray(пути) || пути.length === 0) {
+                показатьСостояние("Нет выбранных файлов и папок.");
+                return;
+            }
+
+            if (!путьРабочейПапки) {
+                показатьСостояние(
+                    "Не удалось определить путь рабочей папки."
+                );
+                return;
+            }
+
+            const абсолютныеПути = пути.map((путь) => {
+                const части = String(путь)
+                    .replace(/\\/g, "/")
+                    .split("/")
+                    .filter(Boolean);
+
+                const кореньПути = путьРабочейПапки.replace(/[\\/]+$/, "");
+
+                return кореньПути + "\\" + части.join("\\");
             });
 
-            добавитьКнопкуПанели("Папка +", () => {
-                void создатьЭлемент("папка");
-            });
+            const текст = абсолютныеПути.join("\r\n");
 
-            добавитьКнопкуПанели("Обновить", () => {
-                void загрузитьКорень();
-            });
-
-            корень.appendChild(панель);
-
-            for (const элемент of данные.элементы) {
+            try {
                 if (
-                    !элемент ||
-                    typeof элемент.имя !== "string" ||
-                    typeof элемент.путь !== "string" ||
-                    (элемент.тип !== "папка" && элемент.тип !== "файл")
+                    navigator.clipboard &&
+                    typeof navigator.clipboard.writeText === "function"
                 ) {
-                    continue;
+                    await navigator.clipboard.writeText(текст);
+                } else {
+                    const поле = document.createElement("textarea");
+
+                    поле.value = текст;
+                    поле.setAttribute("readonly", "");
+                    поле.style.position = "fixed";
+                    поле.style.left = "-10000px";
+                    поле.style.top = "0";
+                    поле.style.opacity = "0";
+
+                    document.body.appendChild(поле);
+                    поле.focus();
+                    поле.select();
+
+                    const успешно = document.execCommand("copy");
+                    поле.remove();
+
+                    if (!успешно) {
+                        throw new Error(
+                            "Windows не разрешила запись в буфер обмена."
+                        );
+                    }
                 }
 
-                const кнопка = создатьКнопку(
-                    элемент.имя,
-                    элемент.путь,
-                    элемент.тип,
-                    0
+                показатьСостояние(
+                    "Пути скопированы в буфер Windows: " +
+                    абсолютныеПути.length +
+                    ".\nМожно вставить их через Ctrl+V в Блокнот или чат."
+                );
+            } catch (ошибка) {
+                показатьСостояние(
+                    "Не удалось скопировать пути в Windows:\n" +
+                    (ошибка instanceof Error
+                        ? ошибка.message
+                        : String(ошибка))
+                );
+            }
+        }
+
+        function получитьПапкуНазначения(путь, тип) {
+            const нормализованныйПуть = (путь || "").replace(/\\/g, "/");
+
+            if (тип === "папка") {
+                return нормализованныйПуть;
+            }
+
+            const позицияРазделителя = нормализованныйПуть.lastIndexOf("/");
+
+            return позицияРазделителя >= 0
+                ? нормализованныйПуть.slice(0, позицияРазделителя)
+                : "";
+        }
+
+        async function удалитьЭлементДерева(путь, тип) {
+            const имя = путьИмени(путь);
+            const открытыйНормализованныйПуть = (открытыйПуть || "")
+                .replace(/\\/g, "/");
+            const целевойПуть = путь.replace(/\\/g, "/");
+            const открытУдаляемыйФайл = открытыйНормализованныйПуть === целевойПуть;
+            const открытФайлВУдаляемойПапке =
+                тип === "папка" &&
+                открытыйНормализованныйПуть.startsWith(целевойПуть + "/");
+
+            if (
+                (открытУдаляемыйФайл || открытФайлВУдаляемойПапке) &&
+                редактор.value !== исходноеСодержимое
+            ) {
+                показатьСостояние(
+                    "Удаление отменено: сначала сохраните изменения или восстановите исходный текст."
+                );
+                return;
+            }
+
+            const предупреждение = тип === "папка"
+                ? "Переместить папку «" + имя +
+                  "» и всё её содержимое в корзину Windows?"
+                : "Переместить файл «" + имя + "» в корзину Windows?";
+
+            if (!window.confirm(предупреждение)) {
+                показатьСостояние("Удаление отменено.");
+                return;
+            }
+
+            try {
+                показатьСостояние("Проверяю безопасность удаления: " + путь);
+
+                const проверка = await запроситьJSON(
+                    "/api/проверить-удаление",
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ путь: путь })
+                    }
                 );
 
-                if (элемент.тип === "папка") {
-                    кнопка.setAttribute("aria-expanded", "false");
-                    кнопка.addEventListener("click", () => {
-                        void раскрытьПапку(элемент.путь, кнопка, 0);
+                if (
+                    !проверка.успешно ||
+                    typeof проверка.путь !== "string" ||
+                    !window.улитка ||
+                    typeof window.улитка.переместитьВКорзину !== "function"
+                ) {
+                    throw new Error(
+                        "Удаление доступно только в приложении «Улитка» с проверенным мостом Electron."
+                    );
+                }
+
+                const результат = await window.улитка.переместитьВКорзину(
+                    проверка.путь
+                );
+
+                if (!результат || результат.успешно !== true) {
+                    throw new Error("Electron не подтвердил перемещение в корзину.");
+                }
+
+                if (открытУдаляемыйФайл || открытФайлВУдаляемойПапке) {
+                    if (таймерАвтосохранения !== null) {
+                        clearTimeout(таймерАвтосохранения);
+                        таймерАвтосохранения = null;
+                    }
+
+                    открытыйПуть = null;
+                    исходноеСодержимое = "";
+                    редактор.value = "";
+
+                    document.dispatchEvent(new CustomEvent("улитка:файл-открыт", {
+                        detail: { путь: null }
+                    }));
+                }
+
+                выбранныеПути.delete(путь);
+                путиДляКопирования = путиДляКопирования.filter(
+                    (путьБуфера) => путьБуфера !== путь
+                );
+
+                await загрузитьКорень();
+                показатьСостояние(
+                    "Элемент перемещён в корзину Windows: " + путь
+                );
+            } catch (ошибка) {
+                показатьСостояние(
+                    "Не удалось переместить элемент в корзину:\n" +
+                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
+                );
+            }
+        }
+
+        async function вставитьСкопированныеЭлементы(путь, тип) {
+            if (путиДляКопирования.length === 0) {
+                показатьСостояние(
+                    "Сначала выберите элементы и нажмите «Копировать»."
+                );
+                return;
+            }
+
+            const назначение = получитьПапкуНазначения(путь, тип);
+
+            const источники = [...путиДляКопирования];
+            const успешноСкопированные = [];
+            const ошибкиКопирования = [];
+
+            for (const источник of источники) {
+                try {
+                    показатьСостояние(
+                        "Копирую " +
+                        путьИмени(источник) +
+                        " (" +
+                        (успешноСкопированные.length + ошибкиКопирования.length + 1) +
+                        " из " +
+                        источники.length +
+                        ")…"
+                    );
+
+                    const результат = await запроситьJSON(
+                        "/api/копировать",
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                источник: источник,
+                                назначение: назначение
+                            })
+                        }
+                    );
+
+                    if (!результат.успешно) {
+                        throw new Error(
+                            результат.сообщение ||
+                            "Не удалось скопировать элемент."
+                        );
+                    }
+
+                    успешноСкопированные.push(источник);
+                } catch (ошибка) {
+                    ошибкиКопирования.push({
+                        путь: источник,
+                        сообщение: ошибка instanceof Error
+                            ? ошибка.message
+                            : String(ошибка)
                     });
-                } else {
-                    кнопка.addEventListener("click", () => {
-                        void открытьФайл(элемент.путь, кнопка);
-                    });
-                }
-
-                корень.appendChild(кнопка);
-            }
-
-            if (данные.элементы.length === 0) {
-                показатьСостояние("В проекте нет доступных файлов.");
-            } else {
-                показатьСостояние("Загружено элементов: " + данные.элементы.length);
-            }
-            корень.appendChild(состояние);
-        } catch (ошибка) {
-            корень.replaceChildren(состояние);
-            показатьСостояние(
-                "Не удалось загрузить дерево проекта:\n" +
-                (ошибка instanceof Error ? ошибка.message : String(ошибка))
-            );
-        }
-    }
-
-    function запроситьИмяЭлемента(тип) {
-        return new Promise((resolve) => {
-            const слой = document.createElement("div");
-            слой.style.cssText = [
-                "position:fixed",
-                "inset:0",
-                "z-index:100000",
-                "display:flex",
-                "align-items:center",
-                "justify-content:center",
-                "padding:20px",
-                "background:rgba(0,0,0,0.72)"
-            ].join(";");
-
-            const форма = document.createElement("form");
-            форма.setAttribute("role", "dialog");
-            форма.setAttribute("aria-modal", "true");
-            форма.setAttribute("aria-labelledby", "заголовок-окна-создания");
-            форма.style.cssText = [
-                "width:100%",
-                "max-width:380px",
-                "box-sizing:border-box",
-                "padding:22px",
-                "border:1px solid #36566b",
-                "border-radius:8px",
-                "background:#101c27",
-                "color:#d6e4ec",
-                "box-shadow:0 16px 48px rgba(0,0,0,0.5)",
-                "font:inherit"
-            ].join(";");
-
-            const заголовок = document.createElement("div");
-            заголовок.id = "заголовок-окна-создания";
-            заголовок.textContent = тип === "файл"
-                ? "Создание файла"
-                : "Создание папки";
-            заголовок.style.cssText =
-                "font-size:16px;font-weight:600;margin-bottom:10px";
-
-            const описание = document.createElement("div");
-            описание.textContent = тип === "файл"
-                ? "Введите имя файла вместе с расширением."
-                : "Введите имя новой папки.";
-            описание.style.cssText =
-                "font-size:12px;color:#9bb0bf;margin-bottom:12px";
-
-            const поле = document.createElement("input");
-            поле.type = "text";
-            поле.name = "имя";
-            поле.required = true;
-            поле.maxLength = 120;
-            поле.autocomplete = "off";
-            поле.placeholder = тип === "файл"
-                ? "тест_редактора.txt"
-                : "новая_папка";
-            поле.setAttribute("aria-label", "Имя нового элемента");
-            поле.style.cssText = [
-                "display:block",
-                "box-sizing:border-box",
-                "width:100%",
-                "padding:10px",
-                "border:1px solid #36566b",
-                "border-radius:5px",
-                "outline:none",
-                "background:#0b141d",
-                "color:#e7f4fb",
-                "font:inherit",
-                "font-size:13px"
-            ].join(";");
-
-            const кнопки = document.createElement("div");
-            кнопки.style.cssText =
-                "display:flex;justify-content:flex-end;gap:8px;margin-top:18px";
-
-            const отмена = document.createElement("button");
-            отмена.type = "button";
-            отмена.textContent = "Отмена";
-            отмена.style.cssText =
-                "padding:8px 12px;border:1px solid #36566b;border-radius:5px;background:#172936;color:#c8dbe8;cursor:pointer;font:inherit";
-
-            const создать = document.createElement("button");
-            создать.type = "submit";
-            создать.textContent = "Создать";
-            создать.style.cssText =
-                "padding:8px 12px;border:1px solid #3979a0;border-radius:5px;background:#245675;color:#ffffff;cursor:pointer;font:inherit";
-
-            кнопки.append(отмена, создать);
-            форма.append(заголовок, описание, поле, кнопки);
-            слой.appendChild(форма);
-
-            let завершено = false;
-
-            function закрыть(значение) {
-                if (завершено) {
-                    return;
-                }
-
-                завершено = true;
-                document.removeEventListener("keydown", обработатьКлавишу);
-                слой.remove();
-                resolve(значение);
-            }
-
-            function обработатьКлавишу(событие) {
-                if (событие.key === "Escape") {
-                    событие.preventDefault();
-                    закрыть(null);
                 }
             }
 
-            поле.addEventListener("input", () => {
-                поле.setCustomValidity("");
-            });
-
-            форма.addEventListener("submit", (событие) => {
-                событие.preventDefault();
-
-                const имя = поле.value.trim();
-
-                if (!имя) {
-                    поле.setCustomValidity("Введите имя файла или папки.");
-                    поле.reportValidity();
-                    return;
-                }
-
-                закрыть(имя);
-            });
-
-            отмена.addEventListener("click", () => {
-                закрыть(null);
-            });
-
-            слой.addEventListener("click", (событие) => {
-                if (событие.target === слой) {
-                    закрыть(null);
-                }
-            });
-
-            document.addEventListener("keydown", обработатьКлавишу);
-            document.body.appendChild(слой);
-            поле.focus();
-        });
-    }
-    async function создатьЭлемент(тип) {
-
-        const имя = await запроситьИмяЭлемента(тип);
-
-        if (имя === null) {
-            return;
-        }
-
-        const чистоеИмя = имя.trim();
-
-        if (!чистоеИмя) {
-            показатьСостояние("Имя не может быть пустым.");
-            return;
-        }
-
-        try {
-            показатьСостояние("Создаю элемент: " + чистоеИмя);
-
-            const данные = await запроситьJSON(
-                тип === "файл" ? "/api/создать-файл" : "/api/создать-папку",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json; charset=utf-8"
-                    },
-                    body: JSON.stringify({ имя: чистоеИмя })
-                }
+            // Удаляем из внутреннего буфера только успешно скопированные элементы.
+            путиДляКопирования = путиДляКопирования.filter(
+                (источник) => !успешноСкопированные.includes(источник)
             );
 
             await загрузитьКорень();
 
-            if (тип === "файл" && typeof данные.путь === "string") {
-                const кнопки = Array.from(
-                    корень.querySelectorAll("button[data-тип='файл']")
+            if (ошибкиКопирования.length === 0) {
+                показатьСостояние(
+                    "Копирование завершено. Скопировано элементов: " +
+                    успешноСкопированные.length
                 );
-
-                const новаяКнопка = кнопки.find(
-                    (кнопка) => кнопка.dataset.путь === данные.путь
-                );
-
-                if (новаяКнопка) {
-                    await открытьФайл(данные.путь, новаяКнопка);
-                } else {
-                    показатьСостояние(данные.сообщение || "Файл создан.");
-                }
-            } else {
-                показатьСостояние(данные.сообщение || "Папка создана.");
+                return;
             }
-        } catch (ошибка) {
+
+            const подробности = ошибкиКопирования
+                .map((ошибка) => путьИмени(ошибка.путь) + ": " + ошибка.сообщение)
+                .join("\n");
+
             показатьСостояние(
-                "Не удалось создать элемент:\n" +
-                (ошибка instanceof Error ? ошибка.message : String(ошибка))
+                "Скопировано: " +
+                успешноСкопированные.length +
+                " из " +
+                источники.length +
+                ".\nНе удалось скопировать: " +
+                ошибкиКопирования.length +
+                ". Эти элементы остались в буфере для повторной попытки.\n" +
+                подробности
             );
         }
-    }
 
-    let таймерАвтосохранения = null;
-    let повторитьСохранение = false;
+        function открытьКонтекстноеМеню(событие, кнопка) {
+            событие.preventDefault();
+            закрытьКонтекстноеМеню();
 
-    async function сохранитьФайл() {
-        if (!открытыйПуть) {
-            показатьСостояние("Сначала открой файл в дереве проекта.");
-            return;
-        }
+            const меню = document.createElement("div");
+            меню.className = "меню-дерева";
+            меню.setAttribute("role", "menu");
 
-        if (сохраняется) {
-            повторитьСохранение = true;
-            return;
-        }
+            function добавитьПункт(надпись, класс, действие) {
+                const пункт = document.createElement("button");
+                пункт.type = "button";
+                пункт.className = "пункт-меню-дерева" + (класс ? " " + класс : "");
+                пункт.textContent = надпись;
+                пункт.setAttribute("role", "menuitem");
+                пункт.addEventListener("click", действие);
+                меню.appendChild(пункт);
+                return пункт;
+            }
 
-        if (редактор.value === исходноеСодержимое) {
-            показатьСостояние("Все изменения сохранены.");
-            return;
-        }
+            const путьЭлемента = кнопка.dataset.путь;
+            const типЭлемента = кнопка.dataset.тип;
 
-        const путьДляСохранения = открытыйПуть;
-        const содержимоеДляСохранения = редактор.value;
+            if (
+                путьЭлемента &&
+                !выбранныеПути.has(путьЭлемента)
+            ) {
+                очиститьВыделение();
+                выделитьПуть(путьЭлемента);
+                последнийВыбранныйПуть = путьЭлемента;
+            }
 
-        try {
-            сохраняется = true;
-            показатьСостояние("Сохраняю файл…");
+            if (
+                путьЭлемента &&
+                (типЭлемента === "файл" || типЭлемента === "папка")
+            ) {
+                const папкаНазначения = получитьПапкуНазначения(
+                    путьЭлемента,
+                    типЭлемента
+                );
 
-            await запроситьJSON("/api/файл", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json; charset=utf-8"
-                },
-                body: JSON.stringify({
-                    путь: путьДляСохранения,
-                    содержимое: содержимоеДляСохранения
-                })
+                добавитьПункт("Создать файл здесь", "", () => {
+                    закрытьКонтекстноеМеню();
+                    void создатьЭлемент("файл", папкаНазначения);
+                });
+
+                добавитьПункт("Создать папку здесь", "", () => {
+                    закрытьКонтекстноеМеню();
+                    void создатьЭлемент("папка", папкаНазначения);
+                });
+            }
+
+            const количествоВыделенных = выбранныеПути.size;
+            const надписьКопирования = количествоВыделенных > 1
+                ? "Копировать выбранные (" + количествоВыделенных + ")"
+                : "Копировать";
+
+            добавитьПункт(надписьКопирования, "", () => {
+                const путь = кнопка.dataset.путь;
+
+                if (!путь) {
+                    закрытьКонтекстноеМеню();
+                    показатьСостояние("Не удалось определить путь элемента.");
+                    return;
+                }
+
+                путиДляКопирования = получитьПутиДляКопирования(путь);
+
+                const количество = путиДляКопирования.length;
+                закрытьКонтекстноеМеню();
+
+                показатьСостояние(
+                    "В буфере Улитки элементов: " +
+                    количество +
+                    ". Выберите папку и нажмите «Вставить сюда»."
+                );
             });
 
-            if (открытыйПуть === путьДляСохранения) {
-                исходноеСодержимое = содержимоеДляСохранения;
+            // Новый пункт: копирование абсолютных путей в буфер Windows.
+            const количествоПутей = выбранныеПути.size;
+            const надписьПутей = количествоПутей > 1
+                ? "Копировать пути в Windows (" + количествоПутей + ")"
+                : "Копировать путь в Windows";
 
-                if (редактор.value === исходноеСодержимое) {
-                    показатьСостояние("Файл сохранён: " + путьДляСохранения);
+            добавитьПункт(надписьПутей, "", () => {
+                const путь = кнопка.dataset.путь;
+
+                if (!путь) {
+                    закрытьКонтекстноеМеню();
+                    показатьСостояние("Не удалось определить путь элемента.");
+                    return;
+                }
+
+                const пути = получитьПутиДляКопирования(путь);
+
+                закрытьКонтекстноеМеню();
+                void скопироватьПутиВWindows(пути);
+            });
+
+            const надписьВставки = путиДляКопирования.length > 1
+                ? "Вставить сюда (" + путиДляКопирования.length + ")"
+                : "Вставить сюда";
+
+            добавитьПункт(надписьВставки, "", () => {
+                const путь = кнопка.dataset.путь;
+                const тип = кнопка.dataset.тип;
+
+                закрытьКонтекстноеМеню();
+
+                if (путь && (тип === "файл" || тип === "папка")) {
+                    void вставитьСкопированныеЭлементы(путь, тип);
+                }
+            });
+
+            добавитьПункт("Переместить в корзину", "опасное", () => {
+                const путь = кнопка.dataset.путь;
+                const тип = кнопка.dataset.тип;
+
+                закрытьКонтекстноеМеню();
+
+                if (путь && (тип === "файл" || тип === "папка")) {
+                    void удалитьЭлементДерева(путь, тип);
+                }
+            });
+
+            document.body.appendChild(меню);
+
+            const ширина = меню.offsetWidth;
+            const высота = меню.offsetHeight;
+
+            меню.style.left = Math.max(
+                4,
+                Math.min(событие.clientX, window.innerWidth - ширина - 4)
+            ) + "px";
+
+            меню.style.top = Math.max(
+                4,
+                Math.min(событие.clientY, window.innerHeight - высота - 4)
+            ) + "px";
+
+            открытоеКонтекстноеМеню = меню;
+        }
+
+        document.addEventListener("click", (событие) => {
+            if (
+                открытоеКонтекстноеМеню &&
+                !открытоеКонтекстноеМеню.contains(событие.target)
+            ) {
+                закрытьКонтекстноеМеню();
+            }
+        });
+
+        document.addEventListener("keydown", (событие) => {
+            if (событие.key === "Escape") {
+                закрытьКонтекстноеМеню();
+            }
+        });
+
+        function создатьКнопку(имя, путь, тип, отступ) {
+            const кнопка = document.createElement("button");
+            кнопка.type = "button";
+            кнопка.className = "элемент-дерева";
+            кнопка.style.paddingLeft = (7 + отступ * 12) + "px";
+            кнопка.dataset.путь = путь;
+            кнопка.dataset.тип = тип;
+            кнопка.textContent = (тип === "папка" ? "📁 " : "📄 ") + имя;
+            кнопка.title = путь;
+
+            кнопка.addEventListener("contextmenu", (событие) => {
+                открытьКонтекстноеМеню(событие, кнопка);
+            });
+
+            // Обычный щелчок открывает файл или раскрывает папку.
+            // Ctrl/Cmd переключает выделение элемента.
+            // Shift выделяет диапазон видимых элементов дерева.
+            кнопка.addEventListener("click", (событие) => {
+                const множественныйВыбор =
+                    событие.ctrlKey ||
+                    событие.metaKey ||
+                    событие.shiftKey;
+
+                if (!множественныйВыбор) {
+                    очиститьВыделение();
+                    последнийВыбранныйПуть = путь;
+                    return;
+                }
+
+                событие.preventDefault();
+                событие.stopImmediatePropagation();
+
+                const кнопки = Array.from(
+                    корень.querySelectorAll(".элемент-дерева")
+                );
+
+                if (событие.shiftKey && последнийВыбранныйПуть) {
+                    const первыйИндекс = кнопки.findIndex(
+                        (элемент) =>
+                            элемент.dataset.путь === последнийВыбранныйПуть
+                    );
+
+                    const последнийИндекс = кнопки.findIndex(
+                        (элемент) => элемент.dataset.путь === путь
+                    );
+
+                    if (первыйИндекс >= 0 && последнийИндекс >= 0) {
+                        if (!событие.ctrlKey && !событие.metaKey) {
+                            очиститьВыделение();
+                        }
+
+                        const начало = Math.min(
+                            первыйИндекс,
+                            последнийИндекс
+                        );
+
+                        const конец = Math.max(
+                            первыйИндекс,
+                            последнийИндекс
+                        );
+
+                        for (let индекс = начало; индекс <= конец; индекс++) {
+                            const элемент = кнопки[индекс];
+                            const путьЭлемента = элемент.dataset.путь;
+
+                            if (путьЭлемента) {
+                                выбранныеПути.add(путьЭлемента);
+                                элемент.classList.add("выделен");
+                            }
+                        }
+                    }
                 } else {
-                    показатьСостояние("Сохраняю новые изменения…");
-                    повторитьСохранение = true;
+                    if (выбранныеПути.has(путь)) {
+                        выбранныеПути.delete(путь);
+                        кнопка.classList.remove("выделен");
+                    } else {
+                        выбранныеПути.add(путь);
+                        кнопка.classList.add("выделен");
+                    }
+                }
+
+                последнийВыбранныйПуть = путь;
+
+                показатьСостояние(
+                    "Выбрано элементов: " + выбранныеПути.size
+                );
+            });
+
+            return кнопка;
+        }
+
+        function путьИмени(путь) {
+            const части = путь.replace(/\\/g, "/").split("/");
+            return части[части.length - 1] || путь;
+        }
+
+        async function открытьФайл(путь, кнопка) {
+            try {
+                показатьСостояние("Открываю файл…");
+
+                const данные = await запроситьJSON(
+                    "/api/файл?путь=" + encodeURIComponent(путь)
+                );
+
+                if (typeof данные.содержимое !== "string") {
+                    throw new Error("Сервер не вернул текст файла.");
+                }
+
+                if (таймерАвтосохранения !== null) {
+                    clearTimeout(таймерАвтосохранения);
+                    таймерАвтосохранения = null;
+                }
+
+                редактор.value = данные.содержимое;
+                открытыйПуть = путь;
+                исходноеСодержимое = данные.содержимое;
+
+                корень.querySelectorAll(".элемент-дерева.выбран")
+                    .forEach((элемент) => элемент.classList.remove("выбран"));
+
+                кнопка.classList.add("выбран");
+
+                показатьСостояние("Открыт файл: " + путь);
+                редактор.focus();
+
+                document.dispatchEvent(new CustomEvent("улитка:файл-открыт", {
+                    detail: { путь: путь }
+                }));
+            } catch (ошибка) {
+                показатьСостояние(
+                    "Не удалось открыть файл:\n" +
+                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
+                );
+            }
+        }
+
+        async function раскрытьПапку(путь, кнопка, отступ) {
+            const ужеРаскрыта = кнопка.getAttribute("aria-expanded") === "true";
+            const существующийБлок = кнопка.nextElementSibling;
+
+            if (
+                ужеРаскрыта &&
+                существующийБлок instanceof HTMLElement &&
+                существующийБлок.classList.contains("содержимое-папки")
+            ) {
+                существующийБлок.remove();
+                кнопка.setAttribute("aria-expanded", "false");
+                кнопка.textContent = "📁 " + путьИмени(путь);
+                return;
+            }
+
+            try {
+                кнопка.disabled = true;
+                показатьСостояние("Читаю папку: " + путь);
+
+                const данные = await запроситьJSON(
+                    "/api/файлы?путь=" + encodeURIComponent(путь)
+                );
+
+                if (!Array.isArray(данные.элементы)) {
+                    throw new Error("Сервер вернул некорректный список файлов.");
+                }
+
+                const блок = document.createElement("div");
+                блок.className = "содержимое-папки";
+
+                if (данные.элементы.length === 0) {
+                    const пусто = document.createElement("div");
+                    пусто.className = "состояние-дерева-проекта";
+                    пусто.textContent = "Папка пуста";
+                    блок.appendChild(пусто);
+                } else {
+                    for (const элемент of данные.элементы) {
+                        if (
+                            !элемент ||
+                            typeof элемент.имя !== "string" ||
+                            typeof элемент.путь !== "string" ||
+                            (элемент.тип !== "папка" && элемент.тип !== "файл")
+                        ) {
+                            continue;
+                        }
+
+                        const дочерняяКнопка = создатьКнопку(
+                            элемент.имя,
+                            элемент.путь,
+                            элемент.тип,
+                            отступ + 1
+                        );
+
+                        if (элемент.тип === "папка") {
+                            дочерняяКнопка.setAttribute("aria-expanded", "false");
+                            дочерняяКнопка.addEventListener("click", () => {
+                                void раскрытьПапку(
+                                    элемент.путь,
+                                    дочерняяКнопка,
+                                    отступ + 1
+                                );
+                            });
+                        } else {
+                            дочерняяКнопка.addEventListener("click", () => {
+                                void открытьФайл(элемент.путь, дочерняяКнопка);
+                            });
+                        }
+
+                        блок.appendChild(дочерняяКнопка);
+                    }
+                }
+
+                const прежнийБлок = кнопка.nextElementSibling;
+                if (
+                    прежнийБлок instanceof HTMLElement &&
+                    прежнийБлок.classList.contains("содержимое-папки")
+                ) {
+                    прежнийБлок.remove();
+                }
+
+                кнопка.after(блок);
+                кнопка.setAttribute("aria-expanded", "true");
+                кнопка.textContent = "📂 " + путьИмени(путь);
+
+                показатьСостояние("Элементов в папке: " + данные.элементы.length);
+            } catch (ошибка) {
+                показатьСостояние(
+                    "Не удалось прочитать папку:\n" +
+                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
+                );
+            } finally {
+                кнопка.disabled = false;
+            }
+        }
+
+        function запроситьИмяЭлемента(тип) {
+            return new Promise((resolve) => {
+                const слой = document.createElement("div");
+                слой.style.cssText = [
+                    "position:fixed",
+                    "inset:0",
+                    "z-index:100000",
+                    "display:flex",
+                    "align-items:center",
+                    "justify-content:center",
+                    "padding:20px",
+                    "background:rgba(0,0,0,0.72)"
+                ].join(";");
+
+                const форма = document.createElement("form");
+                форма.setAttribute("role", "dialog");
+                форма.setAttribute("aria-modal", "true");
+                форма.style.cssText = [
+                    "width:100%",
+                    "max-width:380px",
+                    "box-sizing:border-box",
+                    "padding:22px",
+                    "border:1px solid #36566b",
+                    "border-radius:8px",
+                    "background:#101c27",
+                    "color:#d6e4ec",
+                    "box-shadow:0 16px 48px rgba(0,0,0,0.5)",
+                    "font:inherit"
+                ].join(";");
+
+                const заголовок = document.createElement("div");
+                заголовок.textContent = тип === "файл"
+                    ? "Создание файла"
+                    : "Создание папки";
+                заголовок.style.cssText =
+                    "font-size:16px;font-weight:600;margin-bottom:10px";
+
+                const описание = document.createElement("div");
+                описание.textContent = тип === "файл"
+                    ? "Введите имя файла вместе с расширением."
+                    : "Введите имя новой папки.";
+                описание.style.cssText =
+                    "font-size:12px;color:#9bb0bf;margin-bottom:12px";
+
+                const поле = document.createElement("input");
+                поле.type = "text";
+                поле.name = "имя";
+                поле.required = true;
+                поле.maxLength = 120;
+                поле.autocomplete = "off";
+                поле.placeholder = тип === "файл"
+                    ? "тест_редактора.txt"
+                    : "новая_папка";
+                поле.setAttribute("aria-label", "Имя нового элемента");
+                поле.style.cssText = [
+                    "display:block",
+                    "box-sizing:border-box",
+                    "width:100%",
+                    "padding:10px",
+                    "border:1px solid #36566b",
+                    "border-radius:5px",
+                    "outline:none",
+                    "background:#0b141d",
+                    "color:#e7f4fb",
+                    "font:inherit",
+                    "font-size:13px"
+                ].join(";");
+
+                const кнопки = document.createElement("div");
+                кнопки.style.cssText =
+                    "display:flex;justify-content:flex-end;gap:8px;margin-top:18px";
+
+                const отмена = document.createElement("button");
+                отмена.type = "button";
+                отмена.textContent = "Отмена";
+                отмена.style.cssText =
+                    "padding:8px 12px;border:1px solid #36566b;border-radius:5px;background:#172936;color:#c8dbe8;cursor:pointer;font:inherit";
+
+                const создать = document.createElement("button");
+                создать.type = "submit";
+                создать.textContent = "Создать";
+                создать.style.cssText =
+                    "padding:8px 12px;border:1px solid #3979a0;border-radius:5px;background:#245675;color:#fff;cursor:pointer;font:inherit";
+
+                кнопки.append(отмена, создать);
+                форма.append(заголовок, описание, поле, кнопки);
+                слой.appendChild(форма);
+
+                let завершено = false;
+
+                function закрыть(значение) {
+                    if (завершено) {
+                        return;
+                    }
+
+                    завершено = true;
+                    document.removeEventListener("keydown", обработатьКлавишу);
+                    слой.remove();
+                    resolve(значение);
+                }
+
+                function обработатьКлавишу(событие) {
+                    if (событие.key === "Escape") {
+                        событие.preventDefault();
+                        закрыть(null);
+                    }
+                }
+
+                форма.addEventListener("submit", (событие) => {
+                    событие.preventDefault();
+                    const имя = поле.value.trim();
+
+                    if (!имя) {
+                        поле.setCustomValidity("Введите имя файла или папки.");
+                        поле.reportValidity();
+                        return;
+                    }
+
+                    закрыть(имя);
+                });
+
+                поле.addEventListener("input", () => {
+                    поле.setCustomValidity("");
+                });
+
+                отмена.addEventListener("click", () => закрыть(null));
+
+                слой.addEventListener("click", (событие) => {
+                    if (событие.target === слой) {
+                        закрыть(null);
+                    }
+                });
+
+                document.addEventListener("keydown", обработатьКлавишу);
+                document.body.appendChild(слой);
+                поле.focus();
+            });
+        }
+
+        async function создатьЭлемент(тип, папкаНазначения = "") {
+            const имя = await запроситьИмяЭлемента(тип);
+
+            if (имя === null) {
+                return;
+            }
+
+            const чистоеИмя = имя.trim();
+
+            if (!чистоеИмя) {
+                показатьСостояние("Имя не может быть пустым.");
+                return;
+            }
+
+            try {
+                показатьСостояние("Создаю элемент: " + чистоеИмя);
+
+                const данные = await запроситьJSON(
+                    тип === "файл" ? "/api/создать-файл" : "/api/создать-папку",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json; charset=utf-8"
+                        },
+                        body: JSON.stringify({ имя: чистоеИмя, путь: папкаНазначения })
+                    }
+                );
+
+                await загрузитьКорень();
+
+                if (typeof данные.путь === "string") {
+                    const путьРодителя = папкаНазначения ||
+                        данные.путь.replace(/\\/g, "/").split("/").slice(0, -1).join("/");
+
+                    if (путьРодителя) {
+                        const частиПути = путьРодителя
+                            .replace(/\\/g, "/")
+                            .split("/")
+                            .filter(Boolean);
+
+                        let накопленныйПуть = "";
+
+                        for (let индекс = 0; индекс < частиПути.length; индекс++) {
+                            накопленныйПуть = накопленныйПуть
+                                ? накопленныйПуть + "/" + частиПути[индекс]
+                                : частиПути[индекс];
+
+                            const кнопкаПапки = Array.from(
+                                корень.querySelectorAll("button[data-тип='папка']")
+                            ).find(
+                                (кнопка) => кнопка.dataset.путь === накопленныйПуть
+                            );
+
+                            if (!кнопкаПапки) {
+                                break;
+                            }
+
+                            if (кнопкаПапки.getAttribute("aria-expanded") !== "true") {
+                                await раскрытьПапку(
+                                    накопленныйПуть,
+                                    кнопкаПапки,
+                                    индекс
+                                );
+                            }
+                        }
+                    }
+                }
+
+                if (тип === "файл" && typeof данные.путь === "string") {
+                    const кнопкиФайлов = Array.from(
+                        корень.querySelectorAll("button[data-тип='файл']")
+                    );
+
+                    const новаяКнопка = кнопкиФайлов.find(
+                        (кнопка) => кнопка.dataset.путь === данные.путь
+                    );
+
+                    if (новаяКнопка) {
+                        await открытьФайл(данные.путь, новаяКнопка);
+                    } else {
+                        показатьСостояние(данные.сообщение || "Файл создан.");
+                    }
+                } else {
+                    показатьСостояние(данные.сообщение || "Папка создана.");
+                }
+            } catch (ошибка) {
+                показатьСостояние(
+                    "Не удалось создать элемент:\n" +
+                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
+                );
+            }
+        }
+
+        async function сохранитьФайл() {
+            if (!открытыйПуть) {
+                показатьСостояние("Сначала открой файл в дереве проекта.");
+                return false;
+            }
+
+            if (сохраняется) {
+                повторитьСохранение = true;
+                return false;
+            }
+
+            if (редактор.value === исходноеСодержимое) {
+                показатьСостояние("Все изменения сохранены.");
+                return true;
+            }
+
+            const путьДляСохранения = открытыйПуть;
+            const содержимоеДляСохранения = редактор.value;
+
+            try {
+                сохраняется = true;
+                показатьСостояние("Сохраняю файл…");
+
+                await запроситьJSON("/api/файл", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json; charset=utf-8"
+                    },
+                    body: JSON.stringify({
+                        путь: путьДляСохранения,
+                        содержимое: содержимоеДляСохранения
+                    })
+                });
+
+                if (открытыйПуть === путьДляСохранения) {
+                    исходноеСодержимое = содержимоеДляСохранения;
+
+                    if (редактор.value === исходноеСодержимое) {
+                        показатьСостояние("Файл сохранён: " + путьДляСохранения);
+                    } else {
+                        повторитьСохранение = true;
+                    }
+                }
+
+                return true;
+            } catch (ошибка) {
+                показатьСостояние(
+                    "Не удалось сохранить файл:\n" +
+                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
+                );
+                return false;
+            } finally {
+                сохраняется = false;
+
+                if (повторитьСохранение) {
+                    повторитьСохранение = false;
+
+                    if (
+                        открытыйПуть &&
+                        редактор.value !== исходноеСодержимое
+                    ) {
+                        setTimeout(() => {
+                            void сохранитьФайл();
+                        }, 100);
+                    }
                 }
             }
-        } catch (ошибка) {
-            показатьСостояние(
-                "Не удалось сохранить файл:\n" +
-                (ошибка instanceof Error ? ошибка.message : String(ошибка))
-            );
-        } finally {
-            сохраняется = false;
+        }
 
-            if (повторитьСохранение) {
-                повторитьСохранение = false;
+        async function выбратьРабочуюПапку(кнопка) {
+            try {
+                if (сохраняется) {
+                    показатьСостояние("Дождись завершения сохранения файла.");
+                    return;
+                }
 
                 if (
                     открытыйПуть &&
                     редактор.value !== исходноеСодержимое
                 ) {
-                    setTimeout(() => {
-                        void сохранитьФайл();
-                    }, 100);
+                    показатьСостояние(
+                        "Сначала сохрани изменения сочетанием Ctrl+S."
+                    );
+                    редактор.focus();
+                    return;
                 }
+
+                if (
+                    !window.улитка ||
+                    typeof window.улитка.выбратьПапку !== "function"
+                ) {
+                    throw new Error(
+                        "Системный выбор папки недоступен. Перезапусти «Улитку»."
+                    );
+                }
+
+                кнопка.disabled = true;
+
+                const выбранныйПуть = await window.улитка.выбратьПапку();
+
+                if (!выбранныйПуть) {
+                    показатьСостояние("Выбор папки отменён.");
+                    return;
+                }
+
+                показатьСостояние("Переключаю рабочую папку…");
+
+                await запроситьJSON("/api/рабочая-папка", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json; charset=utf-8"
+                    },
+                    body: JSON.stringify({ путь: выбранныйПуть })
+                });
+
+                if (
+                    !window.улитка ||
+                    typeof window.улитка.синхронизироватьРабочуюПапку !== "function"
+                 ) {
+                    throw new Error(
+                    "Синхронизация рабочей папки недоступна. Перезапусти «Улитку»."
+                );
+}
+
+await window.улитка.синхронизироватьРабочуюПапку(
+    выбранныйПуть
+);
+
+                if (таймерАвтосохранения !== null) {
+                    clearTimeout(таймерАвтосохранения);
+                    таймерАвтосохранения = null;
+                }
+
+                открытыйПуть = null;
+                исходноеСодержимое = "";
+                редактор.value = "";
+                путьРабочейПапки = выбранныйПуть;
+
+                очиститьВыделение();
+                последнийВыбранныйПуть = null;
+                путиДляКопирования = [];
+
+                await загрузитьКорень();
+
+                показатьСостояние(
+                    "Рабочая папка изменена:\n" + путьРабочейПапки
+                );
+            } catch (ошибка) {
+                показатьСостояние(
+                    "Не удалось изменить рабочую папку:\n" +
+                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
+                );
+            } finally {
+                кнопка.disabled = false;
             }
         }
-    }
 
-    редактор.addEventListener("input", () => {
-        if (!открытыйПуть) {
-            return;
+        async function загрузитьКорень(восстановитьРаскрытие = true) {
+            const раскрытыеПути = восстановитьРаскрытие
+                ? Array.from(
+                    корень.querySelectorAll(
+                        "button.элемент-дерева[data-тип='папка'][aria-expanded='true']"
+                    )
+                )
+                    .map((кнопка) => кнопка.dataset.путь)
+                    .filter((путь) => typeof путь === "string" && путь.length > 0)
+                : [];
+
+            const позицияПрокрутки = корень.scrollTop;
+
+            раскрытыеПути.sort((первый, второй) => {
+                const глубинаПервого = первый.replace(/\\/g, "/").split("/").filter(Boolean).length;
+                const глубинаВторого = второй.replace(/\\/g, "/").split("/").filter(Boolean).length;
+                return глубинаПервого - глубинаВторого;
+            });
+
+            try {
+                const данные = await запроситьJSON("/api/файлы?путь=");
+
+                if (!Array.isArray(данные.элементы)) {
+                    throw new Error("Сервер вернул некорректный список файлов.");
+                }
+
+                корень.replaceChildren();
+
+                const панель = document.createElement("div");
+                панель.className = "панель-дерева";
+
+                function добавитьКнопкуПанели(надпись, действие) {
+                    const кнопка = document.createElement("button");
+                    кнопка.type = "button";
+                    кнопка.className = "кнопка-панели-дерева";
+                    кнопка.textContent = надпись;
+                    кнопка.addEventListener("click", действие);
+                    панель.appendChild(кнопка);
+                    return кнопка;
+                }
+
+                добавитьКнопкуПанели("Файл +", () => {
+                    void создатьЭлемент("файл");
+                });
+
+                добавитьКнопкуПанели("Папка +", () => {
+                    void создатьЭлемент("папка");
+                });
+
+                добавитьКнопкуПанели("Обновить", () => {
+                    void загрузитьКорень();
+                });
+
+                const кнопкаВыбора = добавитьКнопкуПанели(
+                    "Выбрать папку",
+                    () => {
+                        void выбратьРабочуюПапку(кнопкаВыбора);
+                    }
+                );
+
+                корень.appendChild(панель);
+
+                for (const элемент of данные.элементы) {
+                    if (
+                        !элемент ||
+                        typeof элемент.имя !== "string" ||
+                        typeof элемент.путь !== "string" ||
+                        (
+                            элемент.тип !== "папка" &&
+                            элемент.тип !== "файл"
+                        )
+                    ) {
+                        continue;
+                    }
+
+                    const кнопка = создатьКнопку(
+                        элемент.имя,
+                        элемент.путь,
+                        элемент.тип,
+                        0
+                    );
+
+                    if (элемент.тип === "папка") {
+                        кнопка.setAttribute("aria-expanded", "false");
+
+                        кнопка.addEventListener("click", () => {
+                            void раскрытьПапку(
+                                элемент.путь,
+                                кнопка,
+                                0
+                            );
+                        });
+                    } else {
+                        кнопка.addEventListener("click", () => {
+                            void открытьФайл(
+                                элемент.путь,
+                                кнопка
+                            );
+                        });
+                    }
+
+                    корень.appendChild(кнопка);
+                }
+
+                корень.appendChild(состояние);
+
+                for (const путь of раскрытыеПути) {
+                    const кнопкаПапки = Array.from(
+                        корень.querySelectorAll(
+                            "button.элемент-дерева[data-тип='папка']"
+                        )
+                    ).find(
+                        (кнопка) => кнопка.dataset.путь === путь
+                    );
+
+                    if (!кнопкаПапки) {
+                        continue;
+                    }
+
+                    if (
+                        кнопкаПапки.getAttribute("aria-expanded") !== "true"
+                    ) {
+                        const глубина = путь.replace(/\\/g, "/").split("/").filter(Boolean).length;
+
+                        await раскрытьПапку(
+                            путь,
+                            кнопкаПапки,
+                            Math.max(0, глубина - 1)
+                        );
+                    }
+                }
+
+                корень.scrollTop = позицияПрокрутки;
+
+                показатьСостояние(
+                    данные.элементы.length === 0
+                        ? "В рабочей папке нет доступных файлов."
+                        : "Загружено элементов: " + данные.элементы.length
+                );
+            } catch (ошибка) {
+                корень.replaceChildren(состояние);
+
+                показатьСостояние(
+                    "Не удалось загрузить дерево проекта:\n" +
+                    (
+                        ошибка instanceof Error
+                            ? ошибка.message
+                            : String(ошибка)
+                    )
+                );
+            }
         }
+        редактор.addEventListener("input", () => {
+            if (!открытыйПуть) {
+                return;
+            }
 
-        if (таймерАвтосохранения !== null) {
-            clearTimeout(таймерАвтосохранения);
-        }
+            if (таймерАвтосохранения !== null) {
+                clearTimeout(таймерАвтосохранения);
+            }
 
-        показатьСостояние("Есть несохранённые изменения…");
+            показатьСостояние("Есть несохранённые изменения…");
 
-        таймерАвтосохранения = setTimeout(() => {
-            таймерАвтосохранения = null;
-            void сохранитьФайл();
-        }, 500);
-    });
-    document.addEventListener("keydown", (событие) => {
-        if ((событие.ctrlKey || событие.metaKey) && событие.key.toLowerCase() === "s") {
-            событие.preventDefault();
-            void сохранитьФайл();
-        }
-    });
+            таймерАвтосохранения = setTimeout(() => {
+                таймерАвтосохранения = null;
+                void сохранитьФайл();
+            }, 500);
+        });
 
-    window.addEventListener("focus", () => {
-        if (открытыйПуть && редактор.value !== исходноеСодержимое) {
-            показатьСостояние("Есть несохранённые изменения: " + открытыйПуть);
-        }
-    });
+        document.addEventListener("keydown", (событие) => {
+            if (
+                (событие.ctrlKey || событие.metaKey) &&
+                событие.key.toLowerCase() === "s"
+            ) {
+                событие.preventDefault();
+                void сохранитьФайл();
+            }
+        });
 
-    void загрузитьКорень();
+        window.addEventListener("focus", () => {
+            if (открытыйПуть && редактор.value !== исходноеСодержимое) {
+                показатьСостояние(
+                    "Есть несохранённые изменения: " + открытыйПуть
+                );
+            }
+        });
+
+        void загрузитьКорень();
     }
 
     if (document.readyState === "loading") {
@@ -674,7 +1454,7 @@ function путьВнутриПроекта(путь: unknown): string {
         относительныйПуть.startsWith(".." + sep) ||
         isAbsolute(относительныйПуть)
     ) {
-        throw new Error("Доступ за пределы папки проекта запрещён.");
+        throw new Error("Доступ за пределы рабочей папки запрещён.");
     }
 
     return полныйПуть;
@@ -690,7 +1470,7 @@ async function проверитьРеальныйПуть(полныйПуть: 
         относительныйПуть.startsWith(".." + sep) ||
         isAbsolute(относительныйПуть)
     ) {
-        throw new Error("Доступ к файлам за пределами проекта запрещён.");
+        throw new Error("Доступ к файлам за пределами рабочей папки запрещён.");
     }
 
     return реальныйПуть;
@@ -710,21 +1490,18 @@ function разрешённыйТекстовыйФайл(имя: string): boole
 }
 
 function отправитьJSON(
-    ответ: import("node:http").ServerResponse,
+    ответ: ServerResponse,
     код: number,
     данные: Record<string, unknown>,
 ): void {
     ответ.statusCode = код;
-    ответ.setHeader(
-        "Content-Type",
-        "application/json; charset=utf-8",
-    );
+    ответ.setHeader("Content-Type", "application/json; charset=utf-8");
     ответ.setHeader("Cache-Control", "no-store");
     ответ.end(JSON.stringify(данные));
 }
 
 async function прочитатьТело(
-    запрос: import("node:http").IncomingMessage,
+    запрос: IncomingMessage,
 ): Promise<unknown> {
     const части: Buffer[] = [];
     let размер = 0;
@@ -744,6 +1521,22 @@ async function прочитатьТело(
     }
 
     return JSON.parse(Buffer.concat(части).toString("utf8"));
+}
+
+function проверитьИмяЭлемента(имя: string, этоФайл: boolean): void {
+    if (
+        имя.length === 0 ||
+        имя.length > 120 ||
+        имя === "." ||
+        имя === ".." ||
+        имя.includes("/") ||
+        имя.includes("\\") ||
+        /[<>:"|?*\x00-\x1F]/.test(имя) ||
+        /[. ]$/.test(имя) ||
+        /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(имя)
+    ) {
+        throw new Error("Имя содержит недопустимые символы или запрещено Windows.");
+    }
 }
 
 export function создатьМостФайловПроекта(): Plugin {
@@ -781,25 +1574,414 @@ export function создатьМостФайловПроекта(): Plugin {
                     return;
                 }
 
-                const путьЗапроса = decodeURIComponent(адрес.pathname);
+                let путьЗапроса: string;
 
-                if (
-                    путьЗапроса !== "/api/файлы" &&
-                    путьЗапроса !== "/api/файл" &&
-                    путьЗапроса !== "/api/создать-файл" &&
-                    путьЗапроса !== "/api/создать-папку"
-                ) {
+                try {
+                    путьЗапроса = decodeURIComponent(адрес.pathname);
+                } catch {
+                    отправитьJSON(ответ, 400, {
+                        успешно: false,
+                        сообщение: "Адрес запроса содержит некорректное кодирование.",
+                    });
+                    return;
+                }
+
+                const известныеМаршруты = new Set([
+                    "/api/рабочая-папка",
+                    "/api/файлы",
+                    "/api/файл",
+                    "/api/создать-файл",
+                    "/api/создать-папку",
+                    "/api/проверить-удаление",
+                    "/api/копировать",
+                ]);
+
+                if (!известныеМаршруты.has(путьЗапроса)) {
                     следующий();
                     return;
                 }
 
                 void (async () => {
                     try {
+                        if (путьЗапроса === "/api/рабочая-папка") {
+                            if (запрос.method !== "POST") {
+                                ответ.setHeader("Allow", "POST");
+                                отправитьJSON(ответ, 405, {
+                                    успешно: false,
+                                    сообщение: "Для выбора рабочей папки разрешён только POST.",
+                                });
+                                return;
+                            }
+
+                            const тело = await прочитатьТело(запрос);
+
+                            if (
+                                typeof тело !== "object" ||
+                                тело === null ||
+                                !("путь" in тело) ||
+                                typeof тело.путь !== "string" ||
+                                !isAbsolute(тело.путь)
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Не указан корректный абсолютный путь к папке.",
+                                });
+                                return;
+                            }
+
+                            const выбранныйПуть = await realpath(тело.путь);
+                            const сведения = await stat(выбранныйПуть);
+
+                            if (!сведения.isDirectory()) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Выбранный путь не является папкой.",
+                                });
+                                return;
+                            }
+
+                            КОРЕНЬ_ПРОЕКТА = выбранныйПуть;
+
+                            отправитьJSON(ответ, 200, {
+                                успешно: true,
+                                сообщение: "Рабочая папка изменена.",
+                            });
+                            return;
+                        }
+
+                        if (путьЗапроса === "/api/проверить-удаление") {
+                            if (запрос.method !== "POST") {
+                                ответ.setHeader("Allow", "POST");
+                                отправитьJSON(ответ, 405, {
+                                    успешно: false,
+                                    сообщение: "Для проверки удаления разрешён только POST.",
+                                });
+                                return;
+                            }
+
+                            const тело = await прочитатьТело(запрос);
+
+                            if (
+                                typeof тело !== "object" ||
+                                тело === null ||
+                                !("путь" in тело) ||
+                                typeof тело.путь !== "string" ||
+                                !тело.путь.trim()
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Не указан путь к удаляемому элементу.",
+                                });
+                                return;
+                            }
+
+                            const путь = путьВнутриПроекта(тело.путь);
+
+                            if (путь === resolve(КОРЕНЬ_ПРОЕКТА)) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Нельзя удалить корень рабочей папки.",
+                                });
+                                return;
+                            }
+
+                            const относительныйПуть = relative(
+                                КОРЕНЬ_ПРОЕКТА,
+                                путь,
+                            );
+
+                            const частиПути = относительныйПуть
+                                .split(sep)
+                                .filter(Boolean);
+
+                            if (
+                                !относительныйПуть ||
+                                относительныйПуть === ".." ||
+                                относительныйПуть.startsWith(".." + sep) ||
+                                isAbsolute(относительныйПуть)
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Удаление за пределами рабочей папки запрещено.",
+                                });
+                                return;
+                            }
+
+                            if (
+                                частиПути.some(часть =>
+                                    СЛУЖЕБНЫЕ_КАТАЛОГИ.has(часть.toLowerCase())
+                                )
+                            ) {
+                                отправитьJSON(ответ, 403, {
+                                    успешно: false,
+                                    сообщение: "Нельзя удалить служебный каталог.",
+                                });
+                                return;
+                            }
+
+                            const сведения = await lstat(путь);
+
+                            if (сведения.isSymbolicLink()) {
+                                отправитьJSON(ответ, 403, {
+                                    успешно: false,
+                                    сообщение: "Удаление символических ссылок через дерево запрещено.",
+                                });
+                                return;
+                            }
+
+                            if (!сведения.isFile() && !сведения.isDirectory()) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Можно удалить только файл или папку.",
+                                });
+                                return;
+                            }
+
+                            await проверитьРеальныйПуть(путь);
+
+                            отправитьJSON(ответ, 200, {
+                                успешно: true,
+                                сообщение: "Проверка безопасности пройдена.",
+                                путь: относительныйПуть.split(sep).join("/"),
+                                тип: сведения.isDirectory() ? "папка" : "файл",
+                            });
+                            return;
+                        }
+
+                        if (путьЗапроса === "/api/копировать") {
+                            if (запрос.method !== "POST") {
+                                ответ.setHeader("Allow", "POST");
+                                отправитьJSON(ответ, 405, {
+                                    успешно: false,
+                                    сообщение: "Для копирования разрешён только POST.",
+                                });
+                                return;
+                            }
+
+                            const тело = await прочитатьТело(запрос);
+
+                            if (
+                                typeof тело !== "object" ||
+                                тело === null ||
+                                !("источник" in тело) ||
+                                typeof тело.источник !== "string" ||
+                                !тело.источник.trim() ||
+                                !("назначение" in тело) ||
+                                typeof тело.назначение !== "string"
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Укажите источник и папку назначения.",
+                                });
+                                return;
+                            }
+
+                            const источник = путьВнутриПроекта(тело.источник);
+                            const папкаНазначения = путьВнутриПроекта(тело.назначение);
+
+                            if (источник === resolve(КОРЕНЬ_ПРОЕКТА)) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Нельзя копировать корень рабочей папки.",
+                                });
+                                return;
+                            }
+
+                            const относительныйИсточник = relative(
+                                КОРЕНЬ_ПРОЕКТА,
+                                источник,
+                            );
+
+                            const частиИсточника = относительныйИсточник
+                                .split(sep)
+                                .filter(Boolean);
+
+                            if (
+                                !относительныйИсточник ||
+                                относительныйИсточник === ".." ||
+                                относительныйИсточник.startsWith(".." + sep) ||
+                                isAbsolute(относительныйИсточник)
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Источник находится за пределами рабочей папки.",
+                                });
+                                return;
+                            }
+
+                            const сведенияИсточника = await lstat(источник);
+
+                            if (сведенияИсточника.isSymbolicLink()) {
+                                отправитьJSON(ответ, 403, {
+                                    успешно: false,
+                                    сообщение: "Копирование символических ссылок запрещено.",
+                                });
+                                return;
+                            }
+
+                            if (
+                                !сведенияИсточника.isFile() &&
+                                !сведенияИсточника.isDirectory()
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Можно копировать только файлы и папки.",
+                                });
+                                return;
+                            }
+
+                            await проверитьРеальныйПуть(источник);
+                            await проверитьРеальныйПуть(папкаНазначения);
+
+                            const относительнаяПапкаНазначения = relative(
+                                КОРЕНЬ_ПРОЕКТА,
+                                папкаНазначения,
+                            );
+
+                            if (
+                                относительнаяПапкаНазначения === ".." ||
+                                относительнаяПапкаНазначения.startsWith(".." + sep) ||
+                                isAbsolute(относительнаяПапкаНазначения)
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Папка назначения находится за пределами рабочей папки.",
+                                });
+                                return;
+                            }
+
+                            const сведенияНазначения = await lstat(папкаНазначения);
+
+                            if (
+                                сведенияНазначения.isSymbolicLink() ||
+                                !сведенияНазначения.isDirectory()
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Назначение должно быть обычной папкой.",
+                                });
+                                return;
+                            }
+
+                            const имяИсточника = basename(источник);
+                            const путьКопии = join(папкаНазначения, имяИсточника);
+                            const относительныйПутьКопии = relative(
+                                КОРЕНЬ_ПРОЕКТА,
+                                путьКопии,
+                            );
+
+                            if (
+                                относительныйПутьКопии === ".." ||
+                                относительныйПутьКопии.startsWith(".." + sep) ||
+                                isAbsolute(относительныйПутьКопии)
+                            ) {
+                                отправитьJSON(ответ, 400, {
+                                    успешно: false,
+                                    сообщение: "Путь копии выходит за пределы рабочей папки.",
+                                });
+                                return;
+                            }
+
+                            if (сведенияИсточника.isDirectory()) {
+                                const относительныйПутьВНазначение = relative(
+                                    источник,
+                                    папкаНазначения,
+                                );
+
+                                if (
+                                    относительныйПутьВНазначение === "" ||
+                                    (
+                                        относительныйПутьВНазначение !== ".." &&
+                                        !относительныйПутьВНазначение.startsWith(".." + sep) &&
+                                        !isAbsolute(относительныйПутьВНазначение)
+                                    )
+                                ) {
+                                    отправитьJSON(ответ, 400, {
+                                        успешно: false,
+                                        сообщение: "Нельзя копировать папку внутрь самой себя.",
+                                    });
+                                    return;
+                                }
+
+                                const проверитьДерево = async (папка: string): Promise<void> => {
+                                    const записи = await readdir(папка, {
+                                        withFileTypes: true,
+                                    });
+
+                                    for (const запись of записи) {
+                                        const путьЗаписи = join(папка, запись.name);
+
+                                        if (запись.isSymbolicLink()) {
+                                            throw new Error(
+                                                "В исходной папке обнаружена символическая ссылка.",
+                                            );
+                                        }
+
+                                        const сведенияЗаписи = await lstat(путьЗаписи);
+
+                                        if (сведенияЗаписи.isDirectory()) {
+                                            await проверитьДерево(путьЗаписи);
+                                        } else if (!сведенияЗаписи.isFile()) {
+                                            throw new Error(
+                                                "В исходной папке найден неподдерживаемый элемент.",
+                                            );
+                                        }
+
+                                        await проверитьРеальныйПуть(путьЗаписи);
+                                    }
+                                };
+
+                                await проверитьДерево(источник);
+                            }
+
+                            try {
+                                await cp(источник, путьКопии, {
+                                    recursive: сведенияИсточника.isDirectory(),
+                                    force: false,
+                                    errorOnExist: true,
+                                    dereference: false,
+                                });
+                            } catch (ошибка) {
+                                if (
+                                    typeof ошибка === "object" &&
+                                    ошибка !== null &&
+                                    "code" in ошибка &&
+                                    (
+                                        ошибка.code === "EEXIST" ||
+                                        ошибка.code === "ERR_FS_CP_EEXIST"
+                                    )
+                                ) {
+                                    отправитьJSON(ответ, 409, {
+                                        успешно: false,
+                                        сообщение: "Элемент с таким именем уже существует. Перезапись запрещена.",
+                                    });
+                                    return;
+                                }
+
+                                throw ошибка;
+                            }
+
+                            отправитьJSON(ответ, 200, {
+                                успешно: true,
+                                сообщение: "Элемент скопирован.",
+                                путь: относительныйПутьКопии.split(sep).join("/"),
+                            });
+                            return;
+                        }
+
                         if (
-                            (путьЗапроса === "/api/создать-файл" ||
-                                путьЗапроса === "/api/создать-папку") &&
-                            запрос.method === "POST"
+                            путьЗапроса === "/api/создать-файл" ||
+                            путьЗапроса === "/api/создать-папку"
                         ) {
+                            if (запрос.method !== "POST") {
+                                ответ.setHeader("Allow", "POST");
+                                отправитьJSON(ответ, 405, {
+                                    успешно: false,
+                                    сообщение: "Для создания элемента разрешён только POST.",
+                                });
+                                return;
+                            }
+
                             const тело = await прочитатьТело(запрос);
 
                             if (
@@ -810,68 +1992,36 @@ export function создатьМостФайловПроекта(): Plugin {
                             ) {
                                 отправитьJSON(ответ, 400, {
                                     успешно: false,
-                                    сообщение: "Не указано имя нового элемента."
+                                    сообщение: "Не указано имя нового элемента.",
                                 });
                                 return;
                             }
 
                             const имя = тело.имя.trim();
                             const этоФайл = путьЗапроса === "/api/создать-файл";
+                            const папка = "путь" in тело && typeof тело.путь === "string"
+                                ? тело.путь
+                                : "";
 
-                            if (
-                                имя.length === 0 ||
-                                имя.length > 120 ||
-                                имя === "." ||
-                                имя === ".." ||
-                                имя.includes("/") ||
-                                имя.includes("\\") ||
-                                /[<>:"|?*\x00-\x1F]/.test(имя) ||
-                                /[. ]$/.test(имя) ||
-                                /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(имя)
-                            ) {
+                            проверитьИмяЭлемента(имя, этоФайл);
+
+                            const путьПапки = путьВнутриПроекта(папка);
+                            const проверенныйКаталог =
+                                путьПапки === КОРЕНЬ_ПРОЕКТА
+                                    ? await realpath(КОРЕНЬ_ПРОЕКТА)
+                                    : await проверитьРеальныйПуть(путьПапки);
+
+                            const сведенияКаталога = await stat(проверенныйКаталог);
+
+                            if (!сведенияКаталога.isDirectory()) {
                                 отправитьJSON(ответ, 400, {
                                     успешно: false,
-                                    сообщение: "Имя содержит недопустимые символы или запрещено Windows."
+                                    сообщение: "Папка назначения не существует.",
                                 });
                                 return;
                             }
 
-                            if (этоФайл && !разрешённыйТекстовыйФайл(имя)) {
-                                отправитьJSON(ответ, 400, {
-                                    успешно: false,
-                                    сообщение: "Укажите поддерживаемое текстовое расширение, например .ts, .txt или .md."
-                                });
-                                return;
-                            }
-
-                            if (
-                                !этоФайл &&
-                                (
-                                    имя.startsWith(".") ||
-                                    СЛУЖЕБНЫЕ_КАТАЛОГИ.has(имя)
-                                )
-                            ) {
-                                отправитьJSON(ответ, 400, {
-                                    успешно: false,
-                                    сообщение: "Это имя папки зарезервировано."
-                                });
-                                return;
-                            }
-
-                            const новыйПуть = путьВнутриПроекта(имя);
-
-                            if (
-                                relative(
-                                    КОРЕНЬ_ПРОЕКТА,
-                                    resolve(КОРЕНЬ_ПРОЕКТА, имя)
-                                ) !== имя
-                            ) {
-                                отправитьJSON(ответ, 400, {
-                                    успешно: false,
-                                    сообщение: "Разрешено создавать элементы только в корне проекта."
-                                });
-                                return;
-                            }
+                            const новыйПуть = resolve(проверенныйКаталог, имя);
 
                             if (этоФайл) {
                                 await writeFile(
@@ -885,18 +2035,24 @@ export function создатьМостФайловПроекта(): Plugin {
 
                             отправитьJSON(ответ, 201, {
                                 успешно: true,
-                                путь: имя,
+                                путь: relative(КОРЕНЬ_ПРОЕКТА, новыйПуть).split(sep).join("/"),
                                 сообщение: этоФайл
                                     ? "Файл создан."
-                                    : "Папка создана."
+                                    : "Папка создана.",
                             });
                             return;
                         }
 
-                        if (
-                            путьЗапроса === "/api/файлы" &&
-                            запрос.method === "GET"
-                        ) {
+                        if (путьЗапроса === "/api/файлы") {
+                            if (запрос.method !== "GET") {
+                                ответ.setHeader("Allow", "GET");
+                                отправитьJSON(ответ, 405, {
+                                    успешно: false,
+                                    сообщение: "Для чтения дерева разрешён только GET.",
+                                });
+                                return;
+                            }
+
                             const путь = путьВнутриПроекта(
                                 адрес.searchParams.get("путь") ?? "",
                             );
@@ -928,38 +2084,11 @@ export function создатьМостФайловПроекта(): Plugin {
                             }[] = [];
 
                             for (const запись of записи) {
-                                if (
-                                    запись.name.startsWith(".") &&
-                                    запись.name !== ".gitignore" &&
-                                    запись.name !== ".editorconfig"
-                                ) {
-                                    if (!запись.isDirectory()) {
-                                        if (!разрешённыйТекстовыйФайл(запись.name)) {
-                                            continue;
-                                        }
-                                    } else {
-                                        continue;
-                                    }
-                                }
-
-                                if (
-                                    запись.isDirectory() &&
-                                    (
-                                        СЛУЖЕБНЫЕ_КАТАЛОГИ.has(запись.name) ||
-                                        запись.name.endsWith(".резерв")
-                                    )
-                                ) {
-                                    continue;
-                                }
-
                                 if (!запись.isDirectory() && !запись.isFile()) {
                                     continue;
                                 }
 
-                                if (
-                                    запись.isFile() &&
-                                    !разрешённыйТекстовыйФайл(запись.name)
-                                ) {
+                                if (запись.isSymbolicLink()) {
                                     continue;
                                 }
 
@@ -1000,113 +2129,113 @@ export function создатьМостФайловПроекта(): Plugin {
                             return;
                         }
 
-                        if (
-                            путьЗапроса === "/api/файл" &&
-                            запрос.method === "GET"
-                        ) {
-                            const путь = путьВнутриПроекта(
-                                адрес.searchParams.get("путь"),
-                            );
+                        if (путьЗапроса === "/api/файл") {
+                            if (запрос.method === "GET") {
+                                const путь = путьВнутриПроекта(
+                                    адрес.searchParams.get("путь"),
+                                );
 
-                            const проверенныйПуть =
-                                await проверитьРеальныйПуть(путь);
+                                const проверенныйПуть =
+                                    await проверитьРеальныйПуть(путь);
 
-                            const сведения = await stat(проверенныйПуть);
+                                const сведения = await stat(проверенныйПуть);
 
-                            if (
-                                !сведения.isFile() ||
-                                сведения.size > МАКСИМАЛЬНЫЙ_РАЗМЕР_ФАЙЛА ||
-                                !разрешённыйТекстовыйФайл(проверенныйПуть.split(sep).pop() ?? "")
-                            ) {
-                                отправитьJSON(ответ, 400, {
-                                    успешно: false,
-                                    сообщение: "Этот файл нельзя открыть в текстовом редакторе.",
-                                });
-                                return;
-                            }
+                                if (
+                                    !сведения.isFile() ||
+                                    сведения.size > МАКСИМАЛЬНЫЙ_РАЗМЕР_ФАЙЛА ||
+                                    !разрешённыйТекстовыйФайл(
+                                        проверенныйПуть.split(sep).pop() ?? ""
+                                    )
+                                ) {
+                                    отправитьJSON(ответ, 400, {
+                                        успешно: false,
+                                        сообщение: "Этот файл нельзя открыть в текстовом редакторе.",
+                                    });
+                                    return;
+                                }
 
-                            const содержимое = await readFile(
-                                проверенныйПуть,
-                                "utf8",
-                            );
-
-                            отправитьJSON(ответ, 200, {
-                                успешно: true,
-                                путь: relative(
-                                    КОРЕНЬ_ПРОЕКТА,
+                                const содержимое = await readFile(
                                     проверенныйПуть,
-                                ).split(sep).join("/"),
-                                содержимое,
+                                    "utf8",
+                                );
+
+                                отправитьJSON(ответ, 200, {
+                                    успешно: true,
+                                    путь: relative(
+                                        КОРЕНЬ_ПРОЕКТА,
+                                        проверенныйПуть,
+                                    ).split(sep).join("/"),
+                                    содержимое,
+                                });
+                                return;
+                            }
+
+                            if (запрос.method === "POST") {
+                                const тело = await прочитатьТело(запрос);
+
+                                if (
+                                    typeof тело !== "object" ||
+                                    тело === null ||
+                                    !("путь" in тело) ||
+                                    !("содержимое" in тело) ||
+                                    typeof тело.содержимое !== "string"
+                                ) {
+                                    отправитьJSON(ответ, 400, {
+                                        успешно: false,
+                                        сообщение: "Запрос сохранения имеет неверный формат.",
+                                    });
+                                    return;
+                                }
+
+                                const путь = путьВнутриПроекта(тело.путь);
+                                const проверенныйПуть =
+                                    await проверитьРеальныйПуть(путь);
+
+                                const сведения = await stat(проверенныйПуть);
+
+                                if (
+                                    !сведения.isFile() ||
+                                    !разрешённыйТекстовыйФайл(
+                                        проверенныйПуть.split(sep).pop() ?? ""
+                                    )
+                                ) {
+                                    отправитьJSON(ответ, 400, {
+                                        успешно: false,
+                                        сообщение: "Сохранять разрешено только существующие текстовые файлы рабочей папки.",
+                                    });
+                                    return;
+                                }
+
+                                if (
+                                    Buffer.byteLength(тело.содержимое, "utf8") >
+                                    МАКСИМАЛЬНЫЙ_РАЗМЕР_ФАЙЛА
+                                ) {
+                                    отправитьJSON(ответ, 413, {
+                                        успешно: false,
+                                        сообщение: "Файл слишком большой для сохранения через редактор.",
+                                    });
+                                    return;
+                                }
+
+                                await writeFile(
+                                    проверенныйПуть,
+                                    тело.содержимое,
+                                    "utf8",
+                                );
+
+                                отправитьJSON(ответ, 200, {
+                                    успешно: true,
+                                    сообщение: "Файл сохранён.",
+                                });
+                                return;
+                            }
+
+                            ответ.setHeader("Allow", "GET, POST");
+                            отправитьJSON(ответ, 405, {
+                                успешно: false,
+                                сообщение: "Для этого адреса разрешены только GET и POST.",
                             });
-                            return;
                         }
-
-                        if (
-                            путьЗапроса === "/api/файл" &&
-                            запрос.method === "POST"
-                        ) {
-                            const тело = await прочитатьТело(запрос);
-
-                            if (
-                                typeof тело !== "object" ||
-                                тело === null ||
-                                !("путь" in тело) ||
-                                !("содержимое" in тело) ||
-                                typeof тело.содержимое !== "string"
-                            ) {
-                                отправитьJSON(ответ, 400, {
-                                    успешно: false,
-                                    сообщение: "Запрос сохранения имеет неверный формат.",
-                                });
-                                return;
-                            }
-
-                            const путь = путьВнутриПроекта(тело.путь);
-                            const проверенныйПуть =
-                                await проверитьРеальныйПуть(путь);
-
-                            const сведения = await stat(проверенныйПуть);
-
-                            if (
-                                !сведения.isFile() ||
-                                !разрешённыйТекстовыйФайл(проверенныйПуть.split(sep).pop() ?? "")
-                            ) {
-                                отправитьJSON(ответ, 400, {
-                                    успешно: false,
-                                    сообщение: "Сохранять разрешено только существующие текстовые файлы проекта.",
-                                });
-                                return;
-                            }
-
-                            if (
-                                Buffer.byteLength(тело.содержимое, "utf8") >
-                                МАКСИМАЛЬНЫЙ_РАЗМЕР_ФАЙЛА
-                            ) {
-                                отправитьJSON(ответ, 413, {
-                                    успешно: false,
-                                    сообщение: "Файл слишком большой для сохранения через редактор.",
-                                });
-                                return;
-                            }
-
-                            await writeFile(
-                                проверенныйПуть,
-                                тело.содержимое,
-                                "utf8",
-                            );
-
-                            отправитьJSON(ответ, 200, {
-                                успешно: true,
-                                сообщение: "Файл сохранён.",
-                            });
-                            return;
-                        }
-
-                        ответ.setHeader("Allow", "GET, POST");
-                        отправитьJSON(ответ, 405, {
-                            успешно: false,
-                            сообщение: "Для этого адреса разрешены только GET и POST.",
-                        });
                     } catch (ошибка) {
                         const сообщение = ошибка instanceof Error
                             ? ошибка.message
@@ -1118,7 +2247,7 @@ export function создатьМостФайловПроекта(): Plugin {
 
                         отправитьJSON(ответ, код, {
                             успешно: false,
-                            сообщение: "Ошибка работы с файлами проекта: " + сообщение,
+                            сообщение: "Ошибка работы с файлами рабочей папки: " + сообщение,
                         });
                     }
                 })();
