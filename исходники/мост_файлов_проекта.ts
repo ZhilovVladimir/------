@@ -46,6 +46,7 @@ const СЛУЖЕБНЫЕ_КАТАЛОГИ = new Set([
 ]);
 
 const ТЕКСТОВЫЕ_РАСШИРЕНИЯ = new Set([
+    ".ул",
     ".ts",
     ".tsx",
     ".js",
@@ -106,6 +107,9 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
         стиль.textContent = [
             ".дерево-проекта { overflow: auto; min-height: 80px; }",
             ".элемент-дерева { box-sizing: border-box; width: 100%; padding: 5px 7px; border: 0; border-radius: 4px; background: transparent; color: #b8c9d6; text-align: left; font: inherit; font-size: 12px; cursor: pointer; overflow-wrap: anywhere; }",
+            ".значок-файла { display: inline-flex; flex: 0 0 18px; width: 18px; height: 18px; margin-right: 5px; vertical-align: -5px; filter: drop-shadow(0 1px 1px #0008); }",
+            ".значок-файла svg { display: block; width: 18px; height: 18px; overflow: visible; }",
+            ".название-элемента-дерева { vertical-align: middle; }",
             ".элемент-дерева:hover { background: #182a38; color: #fff; }",
             ".элемент-дерева.выбран { background: #203b4e; color: #fff; }",
             ".элемент-дерева.выделен { background: #31536b; color: #fff; outline: 1px solid #527b96; }",
@@ -612,6 +616,111 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
             }
         });
 
+        function получитьSVGЗначкаФайла(имя) {
+            const название = имя.toLocaleLowerCase("ru-RU");
+            const точка = название.lastIndexOf(".");
+            const расширение = точка >= 0 ? название.slice(точка) : "";
+
+            let цвет = "#8b9aaa";
+            let символ = "TXT";
+            let ключ = "текст";
+
+            if (название.endsWith(".ул")) {
+                цвет = "#27c6b2";
+                символ = "🐌";
+                ключ = "улитка";
+            } else if (/тест|test|spec/.test(название)) {
+                цвет = "#a783ef";
+                символ = "✓";
+                ключ = "тест";
+            } else if (/ошибк|error|\\.log$/.test(название)) {
+                цвет = "#ef777d";
+                символ = "!";
+                ключ = "ошибка";
+            } else if (/результат|отч[её]т|report/.test(название)) {
+                цвет = "#42c9a0";
+                символ = "▥";
+                ключ = "отчёт";
+            } else {
+                const языки = {
+                    ".ts": ["#318bd4", "TS", "typescript"],
+                    ".tsx": ["#318bd4", "TS", "typescript"],
+                    ".js": ["#e4b83f", "JS", "javascript"],
+                    ".mjs": ["#e4b83f", "JS", "javascript"],
+                    ".cjs": ["#e4b83f", "JS", "javascript"],
+                    ".py": ["#4b9bd5", "Py", "python"],
+                    ".c": ["#6495df", "C", "c"],
+                    ".h": ["#6495df", "H", "c"],
+                    ".cpp": ["#6089df", "C+", "cpp"],
+                    ".hpp": ["#6089df", "C+", "cpp"],
+                    ".cs": ["#9c78d4", "C#", "csharp"],
+                    ".java": ["#dc8854", "J", "java"],
+                    ".go": ["#45b9cf", "Go", "go"],
+                    ".rs": ["#d88a58", "Rs", "rust"],
+                    ".php": ["#8a91db", "PHP", "php"],
+                    ".rb": ["#dc777b", "Rb", "ruby"],
+                    ".html": ["#e98b54", "</>", "html"],
+                    ".htm": ["#e98b54", "</>", "html"],
+                    ".css": ["#58a8e9", "CSS", "css"],
+                    ".scss": ["#cc83b8", "SC", "scss"],
+                    ".json": ["#76bb7b", "{}", "json"],
+                    ".yaml": ["#59bdb0", "Y", "yaml"],
+                    ".yml": ["#59bdb0", "Y", "yaml"],
+                    ".xml": ["#d7a65a", "XML", "xml"],
+                    ".md": ["#a58de0", "MD", "markdown"],
+                    ".txt": ["#8b9aaa", "TXT", "текст"],
+                    ".ps1": ["#5799df", ">_", "powershell"],
+                    ".bat": ["#5799df", ">", "команда"],
+                    ".cmd": ["#5799df", ">", "команда"],
+                    ".pdf": ["#e87575", "PDF", "pdf"],
+                    ".svg": ["#e2b55b", "SVG", "svg"],
+                    ".png": ["#67b9a2", "IMG", "изображение"],
+                    ".jpg": ["#67b9a2", "IMG", "изображение"],
+                    ".jpeg": ["#67b9a2", "IMG", "изображение"],
+                    ".gif": ["#67b9a2", "IMG", "изображение"],
+                    ".lock": ["#d5ad58", "L", "замок"],
+                    ".toml": ["#70a5c9", "T", "настройки"],
+                    ".env": ["#d5ad58", "ENV", "настройки"],
+                    ".gitignore": ["#e58c61", "G", "git"],
+                    ".editorconfig": ["#8b9aaa", "E", "настройки"]
+                };
+
+                const данные = языки[расширение];
+
+                if (данные) {
+                    цвет = данные[0];
+                    символ = данные[1];
+                    ключ = данные[2];
+                } else if (название === "package.json") {
+                    цвет = "#76bb7b";
+                    символ = "{}";
+                    ключ = "json";
+                }
+            }
+
+            const безопасныйСимвол = символ
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+
+            return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img">' +
+                '<defs><linearGradient id="верх-' + ключ + '" x1="0" y1="0" x2="1" y2="1">' +
+                '<stop offset="0%" stop-color="#ffffff" stop-opacity=".42"/>' +
+                '<stop offset="100%" stop-color="' + цвет + '"/></linearGradient></defs>' +
+                '<path d="M6 2.5h8l5 5V21H6a2 2 0 0 1-2-2V4.5a2 2 0 0 1 2-2Z" fill="#000" opacity=".3" transform="translate(1 1)"/>' +
+                '<path d="M6 2.5h8l5 5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4.5a2 2 0 0 1 2-2Z" fill="' + цвет + '" stroke="#ffffff" stroke-opacity=".45" stroke-width=".7"/>' +
+                '<path d="M14 2.5v5h5" fill="none" stroke="#ffffff" stroke-opacity=".75" stroke-width="1.2"/>' +
+                '<path d="M6 4h7" stroke="#ffffff" stroke-opacity=".35" stroke-width=".7"/>' +
+                '<rect x="5.5" y="10" width="13" height="8" rx="1.5" fill="#07121c" fill-opacity=".28"/>' +
+                '<text x="12" y="15.7" font-family="Arial,sans-serif" font-size="' +
+                (символ.length > 3 ? "4.5" : символ.length > 2 ? "6" : "8") +
+                '" font-weight="bold" text-anchor="middle" fill="#ffffff">' +
+                безопасныйСимвол + '</text>' +
+                '<path d="M6 3.5h6" stroke="#ffffff" stroke-opacity=".5" stroke-width=".6" stroke-linecap="round"/>' +
+                '</svg>';
+        }
+
         function создатьКнопку(имя, путь, тип, отступ) {
             const кнопка = document.createElement("button");
             кнопка.type = "button";
@@ -619,7 +728,20 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
             кнопка.style.paddingLeft = (7 + отступ * 12) + "px";
             кнопка.dataset.путь = путь;
             кнопка.dataset.тип = тип;
-            кнопка.textContent = (тип === "папка" ? "📁 " : "📄 ") + имя;
+            if (тип === "папка") {
+                кнопка.textContent = "📁 " + имя;
+            } else {
+                const значок = document.createElement("span");
+                значок.className = "значок-файла";
+                значок.setAttribute("aria-hidden", "true");
+                значок.innerHTML = получитьSVGЗначкаФайла(имя);
+
+                const название = document.createElement("span");
+                название.className = "название-элемента-дерева";
+                название.textContent = имя;
+
+                кнопка.append(значок, название);
+            }
             кнопка.title = путь;
 
             кнопка.addEventListener("contextmenu", (событие) => {
