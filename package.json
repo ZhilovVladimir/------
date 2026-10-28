@@ -14,7 +14,9 @@
     "scripts": {
         "dev": "vite --host 127.0.0.1 --strictPort",
         "приложение": "electron .",
-        "улитка": "powershell -ExecutionPolicy Bypass -File \"./запуск_улитки.ps1\""
+        "улитка": "powershell -ExecutionPolicy Bypass -File \"./запуск_улитки.ps1\"",
+        "проверка": "tsc -p tsconfig.json --noEmit && tsc -p терминал/tsconfig.json --noEmit && tsc -p tsconfig.сервер.json --noEmit",
+        "сборка": "vite build && tsc -p tsconfig.сервер.json"
     },
     "devDependencies": {
         "@types/node": "^26.4.0",

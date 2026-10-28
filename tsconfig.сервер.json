@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": ".",
+    "outDir": "./результаты_сервера",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": [
+    "исходники/**/*.ts",
+    "терминал/исходники/разборщик_команд.ts",
+    "терминал/исходники/связка_команды_git.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "результаты",
+    "результаты_сервера"
+  ]
+}
