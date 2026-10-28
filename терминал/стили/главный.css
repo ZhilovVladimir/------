@@ -145,15 +145,21 @@ button {
 
         linear-gradient(
             180deg,
-            #172633,
-            #101a24
+            rgba(23, 38, 51, 0.82),
+            rgba(16, 26, 36, 0.9)
         );
+
+    /* Стекло (день 4): панель чуть пропускает фон. */
+    backdrop-filter:
+        blur(10px);
 
     border-bottom:
         1px solid var(--граница);
 
     box-shadow:
-        0 5px 18px rgba(0, 0, 0, 0.28);
+        0 5px 18px rgba(0, 0, 0, 0.28),
+
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
     z-index: 5;
 
@@ -292,6 +298,15 @@ button {
             #142532
         );
 
+    /* Объём: кнопка «стоит» над панелью (день 4). */
+    box-shadow:
+
+        0 3px 0 #0a141c,
+
+        0 4px 8px rgba(0, 0, 0, 0.35),
+
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
     color: #d9e8f1;
 
     cursor: pointer;
@@ -300,7 +315,8 @@ button {
 
         background 120ms ease,
         border-color 120ms ease,
-        transform 120ms ease;
+        transform 120ms ease,
+        box-shadow 120ms ease;
 
 }
 
@@ -319,10 +335,19 @@ button {
 
 }
 
+/* Вдавливание: уезжает вниз, тень исчезает. */
 .кнопка:active {
 
     transform:
-        translateY(1px);
+        translateY(3px);
+
+    box-shadow:
+
+        0 0 0 #0a141c,
+
+        0 1px 2px rgba(0, 0, 0, 0.4),
+
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
 }
 
@@ -514,19 +539,26 @@ body.изменение-размера * {
 
     overflow: hidden;
 
+    /* Стеклянная панель (день 4). */
     background:
 
         linear-gradient(
             180deg,
-            #111c27,
-            #0d1720
+            rgba(17, 28, 39, 0.78),
+            rgba(13, 23, 32, 0.86)
         );
+
+    backdrop-filter:
+        blur(8px);
 
     border:
         1px solid var(--граница);
 
     border-radius:
         var(--радиус);
+
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
 }
 
@@ -626,6 +658,115 @@ body.изменение-размера * {
 
 
 /* ============================================================
+   КОНТЕКСТНОЕ МЕНЮ РЕДАКТОРА (день 6) — всё по-русски
+   ============================================================ */
+
+.контекстное-меню-редактора {
+
+    position: fixed;
+
+    z-index: 1000;
+
+    min-width: 230px;
+
+    padding: 5px;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 1px;
+
+    background: rgba(7, 17, 26, 0.96);
+
+    backdrop-filter: blur(10px);
+
+    border: 1px solid #1c2d3a;
+
+    border-radius: 8px;
+
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.55),
+
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+}
+
+.пункт-контекстного-меню {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 28px;
+
+    width: 100%;
+
+    padding: 7px 12px;
+
+    border: 0;
+
+    border-radius: 5px;
+
+    background: transparent;
+
+    color: #cfe3ff;
+
+    font-family: inherit;
+
+    font-size: 13px;
+
+    text-align: left;
+
+    cursor: pointer;
+
+    transition: background 100ms ease;
+
+}
+
+.пункт-контекстного-меню:hover:not(:disabled) {
+
+    background: #123a52;
+
+}
+
+.пункт-контекстного-меню:disabled {
+
+    color: #4a6a8a;
+
+    cursor: default;
+
+}
+
+.хоткей-контекстного-меню {
+
+    color: #6f8ea8;
+
+    font-size: 11px;
+
+    letter-spacing: 0.4px;
+
+}
+
+.пункт-контекстного-меню:disabled .хоткей-контекстного-меню {
+
+    color: #35506a;
+
+}
+
+.разделитель-контекстного-меню {
+
+    height: 1px;
+
+    margin: 4px 8px;
+
+    background: #1c2d3a;
+
+}
+
+
+/* ============================================================
    РЕДАКТОР
    ============================================================ */
 
@@ -642,7 +783,7 @@ body.изменение-размера * {
     display: grid;
 
     grid-template-columns:
-        56px minmax(0, 1fr);
+        minmax(0, 1fr);
     grid-template-rows:
         minmax(0, 1fr);
 
@@ -650,6 +791,24 @@ body.изменение-размера * {
 
     background:
         #0a1118;
+
+}
+
+/* Контейнер Monaco (день 2). Старые правила ниже сохранены
+   для резерва, но пока не используются. */
+#редактор-монако {
+
+    height:
+        100%;
+
+    min-width:
+        0;
+
+    min-height:
+        0;
+
+    overflow:
+        hidden;
 
 }
 
@@ -1211,10 +1370,16 @@ body.изменение-размера * {
         0 14px;
 
     background:
-        #0b1219;
+        rgba(11, 18, 25, 0.85);
+
+    backdrop-filter:
+        blur(8px);
 
     border-top:
         1px solid var(--граница);
+
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
 
     color:
         #748b9b;

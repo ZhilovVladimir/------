@@ -73,11 +73,48 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
 (function () {
     "use strict";
 
-    function инициализироватьДерево() {
-        const корень = document.querySelector(".дерево-проекта");
+    // День 2: редактором управляет Monaco. Дереву нужен привычный
+    // интерфейс (.value / .focus() / "input"), поэтому даём ему адаптер.
+    function получитьРедактор() {
+        const монако =
+            typeof window.УЛИТКА_Редактор === "function"
+                ? window.УЛИТКА_Редактор()
+                : null;
+
+        if (монако && typeof монако.getValue === "function") {
+            return {
+                get value() {
+                    return монако.getValue();
+                },
+                set value(текст) {
+                    монако.setValue(текст);
+                },
+                focus() {
+                    монако.focus();
+                },
+                addEventListener(тип, обработчик) {
+                    if (тип === "input") {
+                        монако.onDidChangeModelContent(() =>
+                            обработчик({ type: "input" })
+                        );
+                    }
+                },
+            };
+        }
+
+        // Запасной путь: старый textarea (если Monaco ещё не создан).
         const редактор = document.getElementById("редактор-исходного-кода");
 
-        if (!корень || !(редактор instanceof HTMLTextAreaElement)) {
+        return редактор instanceof HTMLTextAreaElement
+            ? редактор
+            : null;
+    }
+
+    function инициализироватьДерево() {
+        const корень = document.querySelector(".дерево-проекта");
+        const редактор = получитьРедактор();
+
+        if (!корень || !редактор) {
             console.error("🐌 Дерево проекта: не найдены корень дерева или редактор.");
             return;
         }
@@ -123,10 +160,55 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
             ".меню-дерева { position: fixed; z-index: 99999; min-width: 210px; max-width: calc(100vw - 16px); padding: 5px; border: 1px solid #36566b; border-radius: 6px; background: #14232f; box-shadow: 0 8px 24px #0008; }",
             ".пункт-меню-дерева { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 4px; background: transparent; color: #d7e6ef; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }",
             ".пункт-меню-дерева:hover { background: #25465a; color: #fff; }",
+            ".уведомления-улитки { position: fixed; top: 18px; right: 18px; z-index: 2147483647; display: flex; flex-direction: column; gap: 9px; width: min(360px, calc(100vw - 36px)); pointer-events: none; }",
+            ".уведомление-улитки { box-sizing: border-box; padding: 12px 15px; border: 1px solid; border-radius: 9px; background: #14232f; color: #eaf5fc; box-shadow: 0 8px 28px #0009; font: 13px/1.45 system-ui, sans-serif; overflow-wrap: anywhere; opacity: 0; transform: translateX(16px); transition: opacity .22s ease, transform .22s ease; }",
+            ".уведомление-улитки.показано { opacity: 1; transform: translateX(0); }",
+            ".уведомление-улитки.исчезает { opacity: 0; transform: translateX(12px); }",
+            ".уведомление-успех { border-color: #398d69; background: #15352b; color: #a9f0cd; }",
+            ".уведомление-информация { border-color: #367da5; background: #142e40; color: #b7e4ff; }",
+            ".уведомление-ошибка { border-color: #a94855; background: #3b2027; color: #ffc0c6; }",
             ".пункт-меню-дерева.опасное { color: #ff9b9b; }"
         ].join("\n");
 
         document.head.appendChild(стиль);
+
+        const контейнерУведомлений = document.createElement("div");
+        контейнерУведомлений.className = "уведомления-улитки";
+        контейнерУведомлений.setAttribute("aria-live", "polite");
+        контейнерУведомлений.setAttribute("aria-relevant", "additions text");
+        document.body.appendChild(контейнерУведомлений);
+
+        function показатьУведомление(текст, тип = "информация", длительность = 2800) {
+            const уведомление = document.createElement("div");
+            уведомление.className = "уведомление-улитки уведомление-" + тип;
+            уведомление.setAttribute("role", тип === "ошибка" ? "alert" : "status");
+            уведомление.textContent = текст;
+            контейнерУведомлений.appendChild(уведомление);
+
+            requestAnimationFrame(() => {
+                уведомление.classList.add("показано");
+            });
+
+            window.setTimeout(() => {
+                уведомление.classList.remove("показано");
+                уведомление.classList.add("исчезает");
+                window.setTimeout(() => уведомление.remove(), 250);
+            }, длительность);
+        }
+
+        function показатьОшибку(заголовок, ошибка) {
+            const подробности = ошибка instanceof Error
+                ? ошибка.message
+                : String(ошибка);
+
+            показатьУведомление(
+                заголовок + "\n" + подробности,
+                "ошибка",
+                6500
+            );
+
+            состояние.textContent = заголовок + "\n" + подробности;
+        }
 
         function показатьСостояние(текст) {
             состояние.textContent = текст;
@@ -253,14 +335,7 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
                     абсолютныеПути.length +
                     ".\nМожно вставить их через Ctrl+V в Блокнот или чат."
                 );
-            } catch (ошибка) {
-                показатьСостояние(
-                    "Не удалось скопировать пути в Windows:\n" +
-                    (ошибка instanceof Error
-                        ? ошибка.message
-                        : String(ошибка))
-                );
-            }
+            } catch (ошибка) { показатьОшибку("Не удалось скопировать пути в Windows:", ошибка); }
         }
 
         function получитьПапкуНазначения(путь, тип) {
@@ -362,12 +437,7 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
                 показатьСостояние(
                     "Элемент перемещён в корзину Windows: " + путь
                 );
-            } catch (ошибка) {
-                показатьСостояние(
-                    "Не удалось переместить элемент в корзину:\n" +
-                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
-                );
-            }
+            } catch (ошибка) { показатьОшибку("Не удалось переместить элемент в корзину:", ошибка); }
         }
 
         async function вставитьСкопированныеЭлементы(путь, тип) {
@@ -436,9 +506,10 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
             await загрузитьКорень();
 
             if (ошибкиКопирования.length === 0) {
-                показатьСостояние(
-                    "Копирование завершено. Скопировано элементов: " +
-                    успешноСкопированные.length
+                показатьУведомление(
+                    "Копирование завершено. Элементов: " +
+                    успешноСкопированные.length,
+                    "успех"
                 );
                 return;
             }
@@ -862,12 +933,7 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
                 document.dispatchEvent(new CustomEvent("улитка:файл-открыт", {
                     detail: { путь: путь }
                 }));
-            } catch (ошибка) {
-                показатьСостояние(
-                    "Не удалось открыть файл:\n" +
-                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
-                );
-            }
+            } catch (ошибка) { показатьОшибку("Не удалось открыть файл:", ошибка); }
         }
 
         async function раскрытьПапку(путь, кнопка, отступ) {
@@ -955,12 +1021,7 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
                 кнопка.textContent = "📂 " + путьИмени(путь);
 
                 показатьСостояние("Элементов в папке: " + данные.элементы.length);
-            } catch (ошибка) {
-                показатьСостояние(
-                    "Не удалось прочитать папку:\n" +
-                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
-                );
-            } finally {
+            } catch (ошибка) { показатьОшибку("Не удалось прочитать папку:", ошибка); } finally {
                 кнопка.disabled = false;
             }
         }
@@ -1184,17 +1245,12 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
                     if (новаяКнопка) {
                         await открытьФайл(данные.путь, новаяКнопка);
                     } else {
-                        показатьСостояние(данные.сообщение || "Файл создан.");
+                        показатьУведомление(данные.сообщение || "Файл создан.", "успех");
                     }
                 } else {
-                    показатьСостояние(данные.сообщение || "Папка создана.");
+                    показатьУведомление(данные.сообщение || "Папка создана.", "успех");
                 }
-            } catch (ошибка) {
-                показатьСостояние(
-                    "Не удалось создать элемент:\n" +
-                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
-                );
-            }
+            } catch (ошибка) { показатьОшибку("Не удалось создать элемент:", ошибка); }
         }
 
         async function сохранитьФайл() {
@@ -1235,19 +1291,14 @@ const КЛИЕНТ_ДЕРЕВА = String.raw`
                     исходноеСодержимое = содержимоеДляСохранения;
 
                     if (редактор.value === исходноеСодержимое) {
-                        показатьСостояние("Файл сохранён: " + путьДляСохранения);
+                        показатьУведомление("Файл сохранён: " + путьДляСохранения, "успех");
                     } else {
                         повторитьСохранение = true;
                     }
                 }
 
                 return true;
-            } catch (ошибка) {
-                показатьСостояние(
-                    "Не удалось сохранить файл:\n" +
-                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
-                );
-                return false;
+            } catch (ошибка) { показатьОшибку("Не удалось сохранить файл:", ошибка); return false;
             } finally {
                 сохраняется = false;
 
@@ -1344,12 +1395,7 @@ await window.улитка.синхронизироватьРабочуюПапк
                 показатьСостояние(
                     "Рабочая папка изменена:\n" + путьРабочейПапки
                 );
-            } catch (ошибка) {
-                показатьСостояние(
-                    "Не удалось изменить рабочую папку:\n" +
-                    (ошибка instanceof Error ? ошибка.message : String(ошибка))
-                );
-            } finally {
+            } catch (ошибка) { показатьОшибку("Не удалось изменить рабочую папку:", ошибка); } finally {
                 кнопка.disabled = false;
             }
         }
@@ -1496,15 +1542,7 @@ await window.улитка.синхронизироватьРабочуюПапк
             } catch (ошибка) {
                 корень.replaceChildren(состояние);
 
-                показатьСостояние(
-                    "Не удалось загрузить дерево проекта:\n" +
-                    (
-                        ошибка instanceof Error
-                            ? ошибка.message
-                            : String(ошибка)
-                    )
-                );
-            }
+                показатьОшибку("Не удалось загрузить дерево проекта:", ошибка);}
         }
         редактор.addEventListener("input", () => {
             if (!открытыйПуть) {

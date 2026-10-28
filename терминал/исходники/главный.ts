@@ -5,6 +5,554 @@
  * ============================================================
  */
 
+import * as monaco from "monaco-editor";
+
+import РедакторВоркер from "monaco-editor/editor/editor.worker?worker";
+
+// Monaco должен получить воркер ДО первого создания редактора.
+Object.assign(self, {
+    MonacoEnvironment: {
+        getWorker: (): Worker => new РедакторВоркер(),
+    },
+});
+
+// Единый словарь языка — его же читает компилятор.
+import {
+    КлючевыеСлова,
+    ЛогическиеОператоры,
+    ОдносимвольныеОператоры,
+    ДвухсимвольныеОператоры,
+    СимволКомментария,
+} from "../../исходники/словарь_языка.js";
+
+// Внутренние системные идентификаторы — Monaco требует латиницу.
+// Всё, что видит пользователь, остаётся по-русски.
+const ИДЕНТИФИКАТОР_ЯЗЫКА = "ulitka";
+
+const ИДЕНТИФИКАТОР_ТЕМЫ = "ulitka";
+
+/**
+ * День 3: язык «улитка» — Monarch-токенизатор по общему словарю.
+ * Плюс языковая конфигурация: комментарий `#`, скобки, автозакрытие.
+ */
+function зарегистрироватьЯзыкУлитки(): void {
+    monaco.languages.register({
+        id: ИДЕНТИФИКАТОР_ЯЗЫКА,
+        extensions: [".ул"],
+        aliases: ["Улитка", "улитка"],
+    });
+
+    monaco.languages.setLanguageConfiguration(
+        ИДЕНТИФИКАТОР_ЯЗЫКА,
+        {
+            comments: {
+                lineComment: СимволКомментария,
+            },
+
+            brackets: [
+                ["(", ")"],
+                ["[", "]"],
+                ["{", "}"],
+            ],
+
+            autoClosingPairs: [
+                { open: "(", close: ")" },
+                { open: "[", close: "]" },
+                { open: "{", close: "}" },
+                { open: '"', close: '"', notIn: ["string"] },
+            ],
+
+            surroundingPairs: [
+                { open: "(", close: ")" },
+                { open: "[", close: "]" },
+                { open: "{", close: "}" },
+                { open: '"', close: '"' },
+            ],
+        },
+    );
+
+    monaco.languages.setMonarchTokensProvider(
+        ИДЕНТИФИКАТОР_ЯЗЫКА,
+        {
+            defaultToken: "",
+
+            keywords: [...КлючевыеСлова],
+
+            logical: [...ЛогическиеОператоры],
+
+            tokenizer: {
+                root: [
+                    // Комментарий — до конца строки.
+                    [/#.*$/, "comment"],
+
+                    // Текст в кавычках (внутри — что угодно, кроме кавычки).
+                    [/"/, { token: "string", next: "@string" }],
+
+                    // Целые числа — как в компиляторе.
+                    [/\d+/, "number"],
+
+                    // Слова: ключевое / логическое / имя.
+                    [
+                        /[А-Яа-яЁёA-Za-z_][А-Яа-яЁёA-Za-z0-9_]*/,
+                        {
+                            cases: {
+                                "@keywords": "keyword",
+                                "@logical": "keyword.logical",
+                                "@default": "identifier",
+                            },
+                        },
+                    ],
+
+                    [/[()[\]{}.,]/, "delimiter"],
+
+                    [
+                        new RegExp(
+                            [...ДвухсимвольныеОператоры, ...ОдносимвольныеОператоры]
+                                .map((оператор) =>
+                                    оператор.replace(
+                                        /[.*+?^${}()|[\]\\]/g,
+                                        "\\$&",
+                                    ),
+                                )
+                                .join("|"),
+                        ),
+                        "operator",
+                    ],
+
+                    [/[ \t\r\n]+/, "white"],
+                ],
+
+                string: [
+                    [/[^"]+/, "string"],
+                    [/"/, { token: "string", next: "@pop" }],
+                ],
+            },
+        },
+    );
+}
+
+/**
+ * День 4: своя тема — палитра терминала (глубокий тёмно-синий фон,
+ * янтарный курсор и ключевые слова, циановые строки).
+ */
+function создатьТемуУлитки(): void {
+    monaco.editor.defineTheme(ИДЕНТИФИКАТОР_ТЕМЫ, {
+        base: "vs-dark",
+        inherit: true,
+
+        rules: [
+            { token: "", foreground: "CFE3FF" },
+            { token: "keyword", foreground: "F0A830", fontStyle: "bold" },
+            { token: "keyword.logical", foreground: "E8C87A" },
+            { token: "comment", foreground: "4A6A8A", fontStyle: "italic" },
+            { token: "string", foreground: "4FD1FF" },
+            { token: "number", foreground: "FFD166" },
+            { token: "operator", foreground: "9FD8FF" },
+            { token: "delimiter", foreground: "6F8EA8" },
+            { token: "identifier", foreground: "CFE3FF" },
+            { token: "white", foreground: "CFE3FF" },
+        ],
+
+        colors: {
+            "editor.background": "#07111A",
+            "editor.foreground": "#CFE3FF",
+            "editorCursor.foreground": "#F0A830",
+            "editor.lineHighlightBackground": "#0A1622",
+            "editor.lineHighlightBorder": "#0A1622",
+            "editor.selectionBackground": "#123A52",
+            "editor.inactiveSelectionBackground": "#0E2A3C",
+            "editorLineNumber.foreground": "#4A6A8A",
+            "editorLineNumber.activeForeground": "#F0A830",
+            "editorIndentGuide.background": "#12222E",
+            "editorIndentGuide.activeBackground": "#1C2D3A",
+            "editorWhitespace.foreground": "#1C2D3A",
+            "editorWidget.background": "#07111A",
+            "editorWidget.border": "#1C2D3A",
+            "editorSuggestWidget.background": "#07111A",
+            "editorSuggestWidget.border": "#1C2D3A",
+            "editorSuggestWidget.selectedBackground": "#123A52",
+            "input.background": "#030611",
+            "input.border": "#1C2D3A",
+            "scrollbarSlider.background": "#12222EAA",
+            "scrollbarSlider.hoverBackground": "#1C2D3ACC",
+            "scrollbarSlider.activeBackground": "#4FD1FFAA",
+        },
+    });
+}
+
+
+// ============================================================
+// ДЕНЬ 5: АВТОДОПОЛНЕНИЕ — СЛОВА, ОПИСАНИЯ, СНИППЕТЫ
+// ============================================================
+
+/**
+ * Описания ключевых слов для подсказок.
+ * Честно: что работает — так и описано, резерв помечен как резерв.
+ */
+const описанияСлов: Record<string, string> = {
+
+    // Работает
+    программа: "Каркас программы: `программа имя` + `начало` … `конец`",
+    начало: "Начало тела программы (после имени)",
+    конец: "Закрывает блок: программу, функцию или условие",
+    показать: "Вывести значение в консоль",
+    пусть: "Объявить переменную: `пусть имя = значение`",
+    если: "Условие: `если выражение тогда` … `конец`",
+    тогда: "Блок условия — выполняется, если условие верно",
+    иначе: "Альтернативный блок условия",
+    функция: "Описать функцию: `функция имя(аргументы)` … `конец`",
+    вернуть: "Вернуть результат из функции",
+
+    // Резерв — заявлено в языке, пока не реализовано
+    и: "Логическое «и» — резерв, пока не работает",
+    или: "Логическое «или» — резерв, пока не работает",
+    не: "Логическое отрицание — резерв, пока не работает",
+    истина: "Логическое «истина» — резерв, пока не работает",
+    ложь: "Логическое «ложь» — резерв, пока не работает",
+    пока: "Цикл «пока» — резерв, пока не работает",
+    для: "Цикл «для» — резерв, пока не работает",
+    из: "Слово языка — резерв, пока не работает",
+    в: "Слово языка — резерв, пока не работает",
+    новый: "Создание объекта — резерв, пока не работает",
+};
+
+/** Готовые конструкции (Tab разворачивает подсказку в блок). */
+const сниппетыЯзыка: ReadonlyArray<{
+    метка: string;
+    подробно: string;
+    текст: string;
+}> = [
+    {
+        метка: "программа (каркас)",
+        подробно: "Имя, начало, тело, конец",
+        текст:
+            "программа ${1:имя_программы}\n\nначало\n\t$0\nконец",
+    },
+    {
+        метка: "если … тогда … конец",
+        подробно: "Условный блок",
+        текст: "если ${1:условие} тогда\n\t$0\nконец",
+    },
+    {
+        метка: "если … иначе … конец",
+        подробно: "Условие с веткой иначе",
+        текст: "если ${1:условие} тогда\n\t$2\nиначе\n\t$0\nконец",
+    },
+    {
+        метка: "функция (каркас)",
+        подробно: "Описание функции с возвратом",
+        текст: "функция ${1:имя}(${2:аргументы})\n\t$0\nконец",
+    },
+    {
+        метка: "пусть (переменная)",
+        подробно: "Объявление переменной",
+        текст: "пусть ${1:имя} = ${2:значение}",
+    },
+    {
+        метка: "показать (вывод)",
+        подробно: "Вывод значения в консоль",
+        текст: "показать ${1:значение}",
+    },
+];
+
+/** Регистрация провайдера автодополнения для языка «улитка». */
+function зарегистрироватьДополнение(): void {
+
+    // Кириллица не входит в стандартные «словообразующие» символы —
+    // объявляем свои, чтобы подсказки появлялись при вводе русских букв.
+    const буквы =
+        "абвгдеёжзийклмнопрстуфхцчшщъыьэюя" +
+        "abcdefghijklmnopqrstuvwxyz_";
+
+    monaco.languages.registerCompletionItemProvider(
+        ИДЕНТИФИКАТОР_ЯЗЫКА,
+        {
+            triggerCharacters: [...буквы],
+
+            provideCompletionItems(
+                модель,
+                позиция,
+            ): monaco.languages.CompletionList {
+                const слово =
+                    модель.getWordUntilPosition(позиция);
+
+                const диапазон = new monaco.Range(
+                    позиция.lineNumber,
+                    слово.startColumn,
+                    позиция.lineNumber,
+                    слово.endColumn,
+                );
+
+                const общий = {
+                    range: диапазон,
+                    kind: monaco.languages.CompletionItemKind.Keyword,
+                };
+
+                const список: monaco.languages.CompletionList = {
+                    incomplete: false,
+                    suggestions: [],
+                };
+
+                for (const ключевое of КлючевыеСлова) {
+                    список.suggestions.push({
+                        ...общий,
+                        label: ключевое,
+                        insertText: ключевое,
+                        detail:
+                            описанияСлов[ключевое] ??
+                            "ключевое слово «Улитки»",
+                    });
+                }
+
+                for (const сниппет of сниппетыЯзыка) {
+                    список.suggestions.push({
+                        ...общий,
+                        label: сниппет.метка,
+                        kind: monaco.languages.CompletionItemKind.Snippet,
+                        insertText: сниппет.текст,
+                        insertTextRules:
+                            monaco.languages.CompletionItemInsertTextRule
+                                .InsertAsSnippet,
+                        detail: сниппет.подробно,
+                    });
+                }
+
+                return список;
+            },
+        },
+    );
+}
+
+
+// ============================================================
+// ДЕНЬ 6: СВОЁ КОНТЕКСТНОЕ МЕНЮ (ПОЛНОСТЬЮ ПО-РУССКИ)
+// ============================================================
+
+type ПунктМеню =
+    | { разделитель: true }
+    | {
+          подпись: string;
+          хоткей: string;
+          команда: string;
+          доступно?: () => boolean;
+      };
+
+const пунктыКонтекстногоМеню: ПунктМеню[] = [
+    {
+        подпись: "Отменить",
+        хоткей: "Ctrl+Z",
+        команда: "undo",
+        доступно: () => редакторМонако?.getModel()?.canUndo() ?? false,
+    },
+    {
+        подпись: "Повторить",
+        хоткей: "Ctrl+Y",
+        команда: "redo",
+        доступно: () => редакторМонако?.getModel()?.canRedo() ?? false,
+    },
+    { разделитель: true },
+    {
+        подпись: "Вырезать",
+        хоткей: "Ctrl+X",
+        команда: "editor.action.clipboardCutAction",
+    },
+    {
+        подпись: "Копировать",
+        хоткей: "Ctrl+C",
+        команда: "editor.action.clipboardCopyAction",
+    },
+    {
+        подпись: "Вставить",
+        хоткей: "Ctrl+V",
+        команда: "editor.action.clipboardPasteAction",
+    },
+    { разделитель: true },
+    {
+        подпись: "Выделить всё",
+        хоткей: "Ctrl+A",
+        команда: "selectAll",
+    },
+];
+
+/**
+ * Перехват правой кнопки + своё меню без единого английского слова.
+ */
+function настроитьКонтекстноеМеню(
+    редактор: monaco.editor.IStandaloneCodeEditor,
+): void {
+
+    const контейнер = редактор.getContainerDomNode();
+
+    let открытоеМеню: HTMLDivElement | null = null;
+
+    const снятьОбработчики: Array<() => void> = [];
+
+    const закрытьМеню = (): void => {
+        открытоеМеню?.remove();
+        открытоеМеню = null;
+
+        for (const снять of снятьОбработчики) {
+            снять();
+        }
+
+        снятьОбработчики.length = 0;
+    };
+
+    const добавитьСлушатель = (
+        цель: EventTarget,
+        тип: string,
+        обработчик: (событие: Event) => void,
+        опции?: boolean | AddEventListenerOptions,
+    ): void => {
+        цель.addEventListener(тип, обработчик, опции);
+
+        снятьОбработчики.push(() =>
+            цель.removeEventListener(тип, обработчик, опции),
+        );
+    };
+
+    контейнер.addEventListener("contextmenu", (событие) => {
+        событие.preventDefault();
+
+        закрытьМеню();
+
+        const меню = document.createElement("div");
+
+        меню.className = "контекстное-меню-редактора";
+
+        меню.setAttribute("role", "menu");
+
+        меню.setAttribute(
+            "aria-label",
+            "Контекстное меню редактора",
+        );
+
+        for (const пункт of пунктыКонтекстногоМеню) {
+            if ("разделитель" in пункт) {
+                const линия = document.createElement("div");
+
+                линия.className =
+                    "разделитель-контекстного-меню";
+
+                линия.setAttribute("aria-hidden", "true");
+
+                меню.append(линия);
+
+                continue;
+            }
+
+            const кнопка = document.createElement("button");
+
+            кнопка.type = "button";
+
+            кнопка.className =
+                "пункт-контекстного-меню";
+
+            кнопка.setAttribute("role", "menuitem");
+
+            const подпись =
+                document.createElement("span");
+
+            подпись.className =
+                "подпись-контекстного-меню";
+
+            подпись.textContent = пункт.подпись;
+
+            const хоткей =
+                document.createElement("span");
+
+            хоткей.className =
+                "хоткей-контекстного-меню";
+
+            хоткей.textContent = пункт.хоткей;
+
+            кнопка.append(подпись, хоткей);
+
+            if (пункт.доступно && !пункт.доступно()) {
+                кнопка.disabled = true;
+            }
+
+            кнопка.addEventListener("click", () => {
+                закрытьМеню();
+
+                редактор.trigger(
+                    "контекстное-меню",
+                    пункт.команда,
+                    null,
+                );
+
+                редактор.focus();
+            });
+
+            меню.append(кнопка);
+        }
+
+        document.body.append(меню);
+
+        открытоеМеню = меню;
+
+        // Не вылезать за края окна.
+        const габарит = меню.getBoundingClientRect();
+
+        const слева = Math.min(
+            событие.clientX,
+            window.innerWidth - габарит.width - 8,
+        );
+
+        const сверху = Math.min(
+            событие.clientY,
+            window.innerHeight - габарит.height - 8,
+        );
+
+        меню.style.left = `${Math.max(8, слева)}px`;
+
+        меню.style.top = `${Math.max(8, сверху)}px`;
+
+        // Закрытие: клик вне, Escape, прокрутка, потеря окна.
+        добавитьСлушатель(
+            document,
+            "mousedown",
+            (событие) => {
+                const цель = событие.target as Node;
+
+                if (!меню.contains(цель)) {
+                    закрытьМеню();
+                }
+            },
+            true,
+        );
+
+        добавитьСлушатель(
+            document,
+            "keydown",
+            (событие) => {
+                if (
+                    (событие as KeyboardEvent).key ===
+                    "Escape"
+                ) {
+                    закрытьМеню();
+
+                    редактор.focus();
+                }
+            },
+            true,
+        );
+
+        добавитьСлушатель(
+            window,
+            "blur",
+            закрытьМеню,
+        );
+
+        добавитьСлушатель(
+            document,
+            "scroll",
+            закрытьМеню,
+            true,
+        );
+    });
+}
+
 type СостояниеТерминала =
     | "готов"
     | "выполнение"
@@ -173,6 +721,14 @@ let состояниеТерминала:
 
 let запросВыполнения:
     AbortController | null = null;
+
+/**
+ * Экземпляр Monaco-редактора (день 2).
+ * Старые функции подсветки (подсветитьКод, обновитьПодсветкуКода
+ * и др.) пока сохранены, но не вызываются.
+ */
+let редакторМонако:
+    monaco.editor.IStandaloneCodeEditor | null = null;
 
 /**
  * ============================================================
@@ -656,29 +1212,64 @@ function обработатьНажатиеКлавишиРедактора(
 }
 
 function настроитьРедактор(): void {
-    const редактор =
-        элементы.редакторИсходногоКода;
+    const контейнер =
+        document.getElementById(
+            "редактор-монако",
+        );
 
-    if (!редактор) {
+    if (!контейнер) {
         return;
     }
 
-    редактор.addEventListener(
-        "input",
-        обработатьВводРедактора,
+    редакторМонако =
+        monaco.editor.create(
+            контейнер,
+            {
+                value: "",
+                language: ИДЕНТИФИКАТОР_ЯЗЫКА,
+                theme: ИДЕНТИФИКАТОР_ТЕМЫ,
+                fontFamily:
+                    'Consolas, "Cascadia Code", monospace',
+                fontSize: 14,
+                lineHeight: 24,
+                minimap: {
+                    enabled: false,
+                },
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                renderLineHighlight: "all",
+                smoothScrolling: true,
+                padding: {
+                    top: 12,
+                    bottom: 12,
+                },
+            },
+        );
+
+    редакторМонако.onDidChangeModelContent(
+        () => {
+            if (
+                состояниеТерминала !==
+                    "выполнение" &&
+                элементы.состояниеРедактора
+            ) {
+                элементы.состояниеРедактора.textContent =
+                    "изменён";
+            }
+        },
     );
 
-    редактор.addEventListener(
-        "scroll",
-        синхронизироватьПрокруткуРедактора,
-    );
+    // Отладочная ручка (день 2): доступ к редактору из консоли и замеров.
+    Object.assign(self, {
+        УЛИТКА_Редактор: () =>
+            редакторМонако,
 
-    редактор.addEventListener(
-        "keydown",
-        обработатьНажатиеКлавишиРедактора,
-    );
+        // День 3–5: доступ к API Monaco (проверки, автодополнение).
+        УЛИТКА_монако: monaco,
+    });
 
-    обновитьПодсветкуКода();
+    // День 6: своё контекстное меню вместо системного.
+    настроитьКонтекстноеМеню(редакторМонако);
 }
 
 /**
@@ -1599,9 +2190,7 @@ async function запуститьПрограмму(): Promise<void> {
         return;
     }
 
-    if (
-        !элементы.редакторИсходногоКода
-    ) {
+    if (!редакторМонако) {
         добавитьВывод(
             "❌ Не найден редактор исходного кода.",
         );
@@ -1610,7 +2199,7 @@ async function запуститьПрограмму(): Promise<void> {
     }
 
     const исходныйКод =
-        элементы.редакторИсходногоКода.value;
+        редакторМонако.getValue();
 
     if (
         исходныйКод.trim().length === 0
@@ -2106,28 +2695,12 @@ function проверитьИнтерфейс(): void {
     }
 
     if (
-        !элементы.редакторИсходногоКода
+        !document.getElementById(
+            "редактор-монако",
+        )
     ) {
         отсутствующие.push(
-            "редактор-исходного-кода",
-        );
-    }
-
-    if (!элементы.подсветкаКода) {
-        отсутствующие.push(
-            "подсветка-кода",
-        );
-    }
-
-    if (!элементы.номераСтрок) {
-        отсутствующие.push(
-            "номера-строк",
-        );
-    }
-
-    if (!элементы.полеРедактора) {
-        отсутствующие.push(
-            "поле-редактора",
+            "редактор-монако",
         );
     }
 
@@ -2223,6 +2796,12 @@ function проверитьИнтерфейс(): void {
  */
 
 проверитьИнтерфейс();
+
+зарегистрироватьЯзыкУлитки();
+
+создатьТемуУлитки();
+
+зарегистрироватьДополнение();
 
 настроитьРедактор();
 
