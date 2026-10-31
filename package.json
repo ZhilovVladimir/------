@@ -1,7 +1,7 @@
 {
     "name": "ulitka",
     "version": "0.1.0",
-    "description": "Компилятор русского языка программирования «Улитка»",
+    "description": "Среда программирования на русском языке «Улитка»",
     "keywords": [
         "русский",
         "язык",
@@ -16,16 +16,17 @@
         "приложение": "electron .",
         "улитка": "powershell -ExecutionPolicy Bypass -File \"./запуск_улитки.ps1\"",
         "проверка": "tsc -p tsconfig.json --noEmit && tsc -p терминал/tsconfig.json --noEmit && tsc -p tsconfig.сервер.json --noEmit",
-        "сборка": "vite build && tsc -p tsconfig.сервер.json"
+        "сборка": "vite build && tsc -p tsconfig.сервер.json",
+        "упаковка": "npm run сборка && electron-builder --win nsis",
+        "упаковка:папка": "npm run сборка && electron-builder --win --dir"
     },
     "devDependencies": {
         "@types/node": "^26.4.0",
         "electron": "^44.7.0",
+        "electron-builder": "^26.18.0",
+        "monaco-editor": "^0.57.0",
         "typescript": "^7.0.2",
         "vite": "^8.2.2"
     },
-    "main": "приложение/главный.cjs",
-    "dependencies": {
-        "monaco-editor": "^0.57.0"
-    }
+    "main": "приложение/главный.cjs"
 }

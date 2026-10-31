@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 desktop.ini
 FolderStylerIcon.ico
 
@@ -45,3 +45,9 @@ FolderStylerIcon.ico
 
 # Архив резервных копий проекта
 документы/резервные_копии/
+
+# Установщик (npm run упаковка)
+упаковка/
+
+# Локальный кэш npm (обход блокировки антивирусом)
+.npm-cache/

@@ -1,0 +1,54 @@
+# ============================================================
+# 🐌 УЛИТКА — упаковка в установщик (electron-builder)
+# ============================================================
+#
+# Запуск:
+#   npm run упаковка        — установщик «Улитка-0.1.0-установщик.exe»
+#   npm run упаковка:папка  — только папка запуска (без установщика)
+#
+# Внутрь попадает только то, что нужно во время работы:
+# код приложения, собранный интерфейс и серверная сборка.
+# Исходники и dev-зависимости в установщик не входят.
+
+appId: ru.ulitka.desktop
+productName: Улитка
+copyright: "© 2026 Владимир"
+
+directories:
+    output: упаковка
+    buildResources: приложение
+
+files:
+    - приложение/**/*
+    - результаты_сервера/**/*
+    - терминал/dist/**/*
+    - package.json
+    - "!**/*.map"
+
+asar: true
+
+# Иконку Electron читает обычным путём — держим её вне архива.
+asarUnpack:
+    - "**/*.ico"
+
+# Своих машинных модулей у «Улитки» нет — пересборка не нужна.
+npmRebuild: false
+
+win:
+    target:
+        - target: nsis
+          arch:
+              - x64
+    icon: приложение/иконка.ico
+    artifactName: "Улитка-${version}-установщик.${ext}"
+
+nsis:
+    oneClick: false
+    perMachine: false
+    allowToChangeInstallationDirectory: true
+    createDesktopShortcut: true
+    createStartMenuShortcut: true
+    shortcutName: Улитка
+    installerLanguages:
+        - ru_RU
+    deleteAppDataOnUninstall: false
