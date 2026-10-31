@@ -1,15 +1,23 @@
-﻿"use strict";
+"use strict";
 
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
+const crypto = require("node:crypto");
 
 const КОРЕНЬ = path.resolve(__dirname, "..");
 const АДРЕС = "http://127.0.0.1:5173";
 const API_ФАЙЛОВ = "/api/%D1%84%D0%B0%D0%B9%D0%BB%D1%8B";
 const ИКОНКА = path.join(КОРЕНЬ, "FolderStylerIcon.ico");
+
+// День 9: одноразовый токен доступа к /api/*. Electron генерирует
+// его до запуска сервера и передаёт через env; сервер отдаёт токен
+// странице HttpOnly-cookie, мосты принимают только запросы с токеном.
+if (!process.env.УЛИТКА_ТОКЕН) {
+    process.env.УЛИТКА_ТОКЕН = crypto.randomBytes(32).toString("hex");
+}
 
 let окно = null;
 let РАБОЧАЯ_ПАПКА = КОРЕНЬ;
@@ -203,33 +211,67 @@ ipcMain.handle("улитка:переместить-в-корзину", async (�
                 resolve(результат);
             };
 
-            const запрос = http.get(
-                АДРЕС + API_ФАЙЛОВ,
-                { timeout: 1500 },
-                ответ => {
-                    let тело = "";
+            let запрос;
 
-                    ответ.setEncoding("utf8");
-
-                    ответ.on("data", часть => {
-                        тело += часть;
-                    });
-
-                    ответ.on("end", () => {
-                        try {
-                            const данные = JSON.parse(тело);
-
-                            закончить(
-                                ответ.statusCode === 200 &&
-                                данные.успешно === true &&
-                                Array.isArray(данные.элементы)
-                            );
-                        } catch {
-                            закончить(false);
+            try {
+                запрос = http.get(
+                    АДРЕС + API_ФАЙЛОВ,
+                    {
+                        timeout: 1500,
+                        headers: {
+                            // Имя заголовка — только латиница: Node.js
+                            // отвергает кириллицу (ERR_INVALID_HTTP_TOKEN).
+                            "x-ulitka-token": process.env.УЛИТКА_ТОКЕН
                         }
-                    });
-                }
-            );
+                    },
+                    ответ => {
+                        let тело = "";
+
+                        ответ.setEncoding("utf8");
+
+                        ответ.on("data", часть => {
+                            тело += часть;
+                        });
+
+                        ответ.on("end", () => {
+                            // Сервер отвечает — значит, жив. Ответ 401/403
+                            // (сервер запущен с другим токеном, например
+                            // вручную через npm run dev) тоже считаем успехом:
+                            // страница получит cookie от того сервера, и всё
+                            // сработает. Главное — не поднимать второй сервер
+                            // на занятом порту.
+                            if (ответ.statusCode !== 200) {
+                                закончить(
+                                    ответ.statusCode === 401 ||
+                                    ответ.statusCode === 403
+                                );
+                                return;
+                            }
+
+                            try {
+                                const данные = JSON.parse(тело);
+
+                                закончить(
+                                    данные.успешно === true &&
+                                    Array.isArray(данные.элементы)
+                                );
+                            } catch {
+                                закончить(false);
+                            }
+                        });
+                    }
+                );
+            } catch (ошибка) {
+                записатьЖурнал(
+                    "\nПроверка сервера не удалась: " +
+                        ошибка.message +
+                        "\n"
+                );
+
+                закончить(false);
+
+                return;
+            }
 
             запрос.on("timeout", () => {
                 запрос.destroy();
